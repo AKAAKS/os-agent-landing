@@ -1,75 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  FiGithub, FiBookOpen, FiActivity, FiCpu, FiShield, FiLayers,
-  FiEye, FiCompass, FiZap, FiCheckCircle, FiArrowRight, FiArrowDown,
-  FiDatabase, FiTerminal, FiAlertTriangle, FiXCircle, FiLock,
+  FiGithub, FiBookOpen, FiActivity, FiCpu, FiShield,
+  FiEye, FiCompass, FiZap, FiCheckCircle, FiArrowDown,
+  FiTerminal, FiAlertTriangle, FiXCircle, FiLock,
 } from 'react-icons/fi'
 
 /* -----------------------------------------------------------------------------
- *  EDIT ME. Copy and links. Repo/docs are private for now, so they point at '#'.
+ *  EDIT ME. Copy and links.
  *  Everything below is drawn from the agent's own logs/agent.log,
  *  data/actions.jsonl, ARCHITECTURE.md and CHANGELOG.md.
  * -------------------------------------------------------------------------- */
-// NOTE: AKAAKS/OS_agent must be made public for these links to resolve.
 const LINKS = {
   github: 'https://github.com/AKAAKS/OS_agent',
   docs: 'https://github.com/AKAAKS/OS_agent#readme',
 }
 
-/* ---- Live monitor replay (condensed from a real afternoon of agent.log) ---- */
-const FEED = [
-  { ram: 41, profile: 'idle', power: 'power_saver', line: 'profile idle · power plan → power_saver', kind: 'power' },
-  { ram: 44, profile: 'idle', power: 'power_saver', line: 'watchdog: 5 worker threads healthy', kind: 'ok' },
-  { ram: 58, profile: 'browsing', power: 'power_saver', line: 'profile switched: idle → browsing (stable 10s)', kind: 'profile' },
-  { ram: 67, profile: 'browsing', power: 'balanced', line: 'power plan → balanced (browsing stable 120s)', kind: 'power' },
-  { ram: 82, profile: 'browsing', power: 'balanced', line: 'observer: RAM 82% (12.6/15.37 GB)', kind: 'obs' },
-  { ram: 91, profile: 'browsing', power: 'balanced', line: 'anomaly detected: ram_high · RAM 91.1%', kind: 'warn' },
-  { ram: 91, profile: 'browsing', power: 'balanced', line: 'ChromaDB: found similar fix (similarity 1.000)', kind: 'mem' },
-  { ram: 91, profile: 'browsing', power: 'balanced', line: 'memory hit → reuse action set_priority', kind: 'mem' },
-  { ram: 74, profile: 'browsing', power: 'balanced', line: 'set firefox.exe (PID 7612) priority → low  ✓', kind: 'act' },
-  { ram: 70, profile: 'browsing', power: 'balanced', line: 'verify ok · outcome stored to semantic memory', kind: 'ok' },
-]
-
-function LiveMonitor() {
-  const [i, setI] = useState(0)
-  const [log, setLog] = useState([FEED[0]])
-  useEffect(() => {
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (reduce) { setLog(FEED.slice(-6)); setI(FEED.length - 1); return }
-    const id = setInterval(() => {
-      setI((p) => {
-        const n = (p + 1) % FEED.length
-        setLog((l) => [...l.slice(-5), FEED[n]])
-        return n
-      })
-    }, 1500)
-    return () => clearInterval(id)
-  }, [])
-  const cur = FEED[i]
-  const ramClass = cur.ram >= 85 ? 'hot' : cur.ram >= 65 ? 'warm' : 'cool'
-  return (
-    <div className="monitor">
-      <div className="mon-bar">
-        <span className="mon-dot" /> os-agent · live
-        <span className="mon-prof">profile: <b>{cur.profile}</b></span>
-        <span className="mon-prof">power: <b>{cur.power}</b></span>
-      </div>
-      <div className="mon-gauges">
-        <div className="gauge">
-          <div className="gauge-top"><span>RAM</span><span className={`gauge-val ${ramClass}`}>{cur.ram}%</span></div>
-          <div className="gauge-track"><div className={`gauge-fill ${ramClass}`} style={{ width: `${cur.ram}%` }} /></div>
-        </div>
-      </div>
-      <div className="mon-feed">
-        {log.map((e, idx) => (
-          <div className={`feed-line ${e.kind}`} key={idx}>
-            <span className="feed-k">{e.kind}</span> {e.line}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
+/* (the live dashboard is shown as a real screenshot in the hero) */
 
 /* ---- Real optimization run (data/actions.jsonl @ 2026-10-17 14:46) ---- */
 const RUN = [
@@ -79,15 +25,6 @@ const RUN = [
   { Icon: FiShield, k: 'Gate', d: 'Action risk = low → auto-approved by the ApprovalGate. (A medium or high-risk action would pause for you, or be denied outright in headless mode.)', tag: 'risk: low' },
   { Icon: FiZap, k: 'Act', d: 'Sets firefox.exe (PID 7612) priority to low in 0 ms. It never kills your browser; firefox is on the _NEVER_KILL_USER_APPS list, so it only deprioritizes.', tag: 'set_priority' },
   { Icon: FiCheckCircle, k: 'Verify', d: 'Success recorded to data/actions.jsonl and the outcome stored back to semantic memory, so the next spike is handled instantly.' },
-]
-
-/* ---- OODA architecture ---- */
-const OODA = [
-  { Icon: FiEye, k: 'Observe', d: 'psutil snapshots of CPU/RAM/disk/GPU every 5s (AC) or 30s (battery); emits an ObservationEvent on a threshold breach, with cooldown to suppress duplicates.' },
-  { Icon: FiCompass, k: 'Orient', d: 'Compiles a dense, factual context block (active profile, top processes, memory consumers). That block is the only thing the model sees.' },
-  { Icon: FiCpu, k: 'Decide', d: '4-layer precedence: decision engine (whitelist → blacklist → learned votes) → ChromaDB semantic reuse → LLM triage (gpt-5-mini, escalates to gpt-5) → rule-based.' },
-  { Icon: FiZap, k: 'Act', d: 'Dispatches an allowlisted, sanitized tool: set priority, kill, restart a service, powercfg. --dry-run audits the intent without executing, and every action is appended to actions.jsonl.' },
-  { Icon: FiCheckCircle, k: 'Verify', d: 'Success → store the fix to semantic memory for future reuse. Failure → log it and raise a Windows toast.' },
 ]
 
 /* ---- Build log (from CHANGELOG.md + agent.log) ---- */
@@ -191,7 +128,7 @@ export default function App() {
               OS Agent is an OODA-loop daemon I run on my own PC. It samples the system every few
               seconds, shifts power plans to match what I’m doing, and when memory or CPU spikes it
               reuses a learned fix (or asks a model), then acts behind a fail-closed approval gate.
-              The panel beside this is a replay of a real afternoon from its log.
+              The panel on the right is its live dashboard.
             </p>
             <div className="cta-row">
               <a className="btn btn-accent" href="#run"><FiArrowDown /> See a real run</a>
@@ -203,7 +140,12 @@ export default function App() {
               ))}
             </div>
           </div>
-          <div className="hero-visual" data-reveal><LiveMonitor /></div>
+          <div className="hero-visual" data-reveal>
+            <figure className="shot">
+              <img src="/dashboard.png" alt="OS Agent live dashboard showing system metrics, top processes, and the agent diagnosis table" />
+              <figcaption className="shot-cap">The live dashboard (PyQt6)</figcaption>
+            </figure>
+          </div>
         </div>
       </section>
 
@@ -244,28 +186,16 @@ export default function App() {
               threads keep it alive; a watchdog restarts any that die.
             </p>
           </div>
-          <div className="ooda">
-            {OODA.map((o, i) => (
-              <div className="ooda-node" data-reveal style={{ transitionDelay: `${i * 50}ms` }} key={o.k}>
-                <div className="ooda-top"><span className="ooda-ico"><o.Icon /></span><span className="ooda-k">{o.k}</span></div>
-                <p>{o.d}</p>
-                {i < OODA.length - 1 && <span className="ooda-arrow"><FiArrowRight /></span>}
-              </div>
-            ))}
+          <div className="arch-figure" data-reveal>
+            <figure className="shot">
+              <img src="/architecture.png" alt="OS Agent architecture diagram: the Observe, Orient, Decide, HITL, Act, Verify control loop over the agentkernel trust substrate" />
+            </figure>
           </div>
-
-          <div className="kernel" data-reveal>
-            <span className="kernel-ico"><FiLayers /></span>
-            <div>
-              <div className="kernel-title"><code>agentkernel/</code> · the trust substrate</div>
-              <p>
-                Risk model, fail-closed <b>ApprovalGate</b>, <b>CommandSanitizer</b>, audit log, cost ledger
-                and semantic fix-memory live in a package with <b>zero dependency on <code>src/</code> or any
-                platform library</b> (enforced by an AST boundary test), so it can be reused by another agent
-                or lifted into its own repo untouched.
-              </p>
-            </div>
-          </div>
+          <p className="section-sub arch-note" data-reveal>
+            The <code>agentkernel/</code> trust substrate (risk model, fail-closed ApprovalGate, CommandSanitizer,
+            audit log, cost ledger, fix-memory) has zero dependency on <code>src/</code> or any platform library,
+            enforced by an AST boundary test, so it can be reused by another agent or lifted into its own repo.
+          </p>
         </div>
       </section>
 
