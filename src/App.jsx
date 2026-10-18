@@ -29,7 +29,7 @@ const RUN = [
 
 /* ---- Build log (from CHANGELOG.md + agent.log) ---- */
 const BUILDLOG = [
-  { s: '✓', c: 'kernel', t: 'extracted agentkernel/: fail-closed gate, sanitizer, audit, cost ledger, fix-memory; platform-free, AST-enforced boundary · 153 tests' },
+  { s: '✓', c: 'kernel', t: 'extracted agentkernel/: fail-closed gate, sanitizer, audit, cost ledger, fix-memory; platform-free, AST-enforced boundary · suite green' },
   { s: '+', c: 'safety', t: '_NEVER_KILL_USER_APPS blocklist: stop killing firefox.exe unprompted (browsers, Office, editors, IDEs)' },
   { s: '~', c: 'noise', t: 'bluetooth LLM spam cut: 897 wasted calls → stricter classification + 30-min cooldown' },
   { s: '+', c: 'safety', t: '--dry-run mode: full OODA loop runs and audits, nothing executes' },
