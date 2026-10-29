@@ -186,6 +186,88 @@ function Shot({ src, alt, cap }) {
     </figure>
   )
 }
+
+/* Faithful vector rebuild of the real `rich` terminal dashboard — crisp at any
+   size, real data from the running tool. (The screenshot it replaces was a
+   low-res raster.) */
+const TD_METRICS = [
+  { k: 'CPU', pct: 96, bar: 'red', pc: 'red' },
+  { k: 'RAM', pct: 82, bar: 'warn', pc: 'warn', sub: '13.1 / 16.0 GB' },
+  { gap: true },
+  { k: 'Disk', pct: 74, bar: 'warn', pc: 'warn' },
+  { k: 'GPU', pct: 45, bar: 'warn', pc: 'warn', sub: 'VRAM: 1536 MB' },
+]
+const TD_PROCS = [
+  ['chrome.exe', 7421, 38.4, 2860], ['Code.exe', 10233, 21.7, 1740],
+  ['python.exe', 15880, 12.1, 410], ['Discord.exe', 9044, 6.3, 690],
+  ['Spotify.exe', 8120, 3.9, 520], ['dwm.exe', 1356, 2.4, 240],
+  ['pythonw.exe', 15764, 1.8, 180], ['explorer.exe', 6012, 0.7, 330],
+]
+const TD_DIAG = [
+  ['14:32:07', 'High CPU on chrome.exe', 'Set process priority…', '0.92', 'low', 'green'],
+  ['14:21:50', 'RAM pressure at 86%', 'Trim working sets', '0.88', 'low', 'green'],
+  ['13:58:12', 'Frequent Bluetooth disco…', 'Disable BT power mgmt', '0.80', 'medium', 'warn'],
+  ['11:04:33', 'Unknown high-CPU process', 'Ask user (HITL gate)', '0.61', 'high', 'red'],
+]
+const cpuClass = (c) => (c >= 30 ? 'red' : c >= 15 ? 'warn' : 'green')
+function TermDash() {
+  return (
+    <div className="sig-dashwrap">
+      <div className="td" role="img" aria-label="OS Agent live terminal dashboard showing system metrics, top processes, status, Bluetooth devices and the agent's diagnosis log">
+        <div className="td-head"><b>OS&nbsp;Agent</b> — Live Dashboard<span className="c-dim">   Press Ctrl+C to exit</span></div>
+        <div className="td-grid">
+          <section className="td-panel"><span className="p-title">System Metrics</span>
+            {TD_METRICS.map((m, i) => m.gap ? <div key={i} className="m-gap" /> : (
+              <div key={i}>
+                <div className="m-row">
+                  <span className="m-k">{m.k}</span>
+                  <span className="m-bar"><span className={`m-fill c-bg-${m.bar}`} style={{ width: `${m.pct}%` }} /></span>
+                  <span className={`m-pc c-${m.pc}`}>{m.pct}%</span>
+                </div>
+                {m.sub && <div className="m-sub">{m.sub}</div>}
+              </div>
+            ))}
+          </section>
+          <section className="td-panel"><span className="p-title">Status</span>
+            <div className="s-row"><span className="s-k">Profile:</span><span><span className="c-green">●</span> <span className="c-green">Coding</span></span></div>
+            <div className="s-sub">↳ Code.exe</div>
+            <div className="s-row"><span className="s-k">Power:</span><span><span className="c-amber">⚡</span> <span className="c-amber">Balanced</span></span></div>
+            <div className="s-spacer" />
+            <div className="s-row"><span className="s-k">Agent:</span><span><span className="c-green">●</span> <span className="c-green">Running</span></span></div>
+            <div className="s-row"><span className="s-k">Battery:</span><span className="c-dim">On AC</span></div>
+            <div className="s-row"><span className="s-k">Polling:</span><span><span className="c-blue">AC (normal)</span> — every 5s</span></div>
+            <div className="s-row"><span className="s-k">Cores:</span><span><span className="c-blue">16</span> logical</span></div>
+          </section>
+          <section className="td-panel"><span className="p-title">Top Processes</span>
+            <div className="t-row t-head"><span>Process</span><span>PID</span><span>CPU%</span><span>RAM MB</span></div>
+            {TD_PROCS.map((p) => (
+              <div key={p[0]} className="t-row">
+                <span>{p[0]}</span><span className="c-dim">{p[1]}</span>
+                <span className={`c-${cpuClass(p[2])}`}>{p[2].toFixed(1)}</span><span className="c-dim">{p[3]}</span>
+              </div>
+            ))}
+          </section>
+          <section className="td-panel"><span className="p-title">Bluetooth</span>
+            <div className="bt-row"><span className="c-green">●</span> Headphones</div>
+            <div className="bt-row"><span className="c-green">●</span> Wireless Mouse</div>
+            <div className="bt-row"><span className="c-green">●</span> Phone</div>
+          </section>
+        </div>
+        <section className="td-panel td-diag"><span className="p-title">Agent Diagnosis</span>
+          <div className="d-row d-head"><span>Time</span><span>Issue</span><span>Fix</span><span>Conf</span><span>Risk</span></div>
+          {TD_DIAG.map((d) => (
+            <div key={d[0]} className="d-row">
+              <span className="c-dim">{d[0]}</span><span>{d[1]}</span><span className="c-dim">{d[2]}</span>
+              <span>{d[3]}</span><span className={`c-${d[5]}`}>{d[4]}</span>
+            </div>
+          ))}
+        </section>
+        <div className="td-foot">next snapshot in 7m 3s │ high-risk = immediate</div>
+      </div>
+      <div className="sig-shotcap">the live dashboard · rich TUI</div>
+    </div>
+  )
+}
 function GateReadout() {
   const [decided, setDecided] = useState(null)
   return (
@@ -385,7 +467,7 @@ export default function App() {
             ))}
           </ol>
         </div>
-        <div className="sig-aside"><Shot src="/dashboard.png" alt="OS Agent live dashboard: system metrics, top processes and the agent's diagnosis" cap="the live dashboard · PyQt6" /></div>
+        <div className="sig-aside"><TermDash /></div>
       </Section>
 
       {/* 04 — act, safely (the solution begins) */}
