@@ -195,6 +195,7 @@ function ControlLoop() {
   const kx = (i) => 40 + i * 189
   return (
     <figure className="sig-arch">
+      <div className="archsvg-scroll">
       <svg className="archsvg" viewBox="0 0 1200 580" role="img"
         aria-label="OS Agent OODA control loop: Observer, Observe, Orient, Decide, a human-in-the-loop approval gate, Act and Verify, looping and running on the agentkernel trust substrate — RiskLevel, ApprovalGate, Command Sanitizer, Audit log, Cost ledger and Fix memory.">
         <defs>
@@ -265,6 +266,7 @@ function ControlLoop() {
           )
         })}
       </svg>
+      </div>
       <figcaption>built to be lifted into its own repo unchanged — JARVIS is lined up as its second consumer</figcaption>
     </figure>
   )
@@ -381,21 +383,10 @@ profile: coding · interrupts a download`}</pre>
   )
 }
 
-/* ---- section wrapper (drives active state) ---- */
-function Section({ index, active, setActive, wide, contentClass = '', children }) {
-  const ref = useRef(null)
-  useEffect(() => {
-    const el = ref.current
-    if (!el || !('IntersectionObserver' in window)) return
-    const io = new IntersectionObserver(
-      (es) => es.forEach((e) => { if (e.isIntersecting && e.intersectionRatio >= 0.55) setActive(index) }),
-      { threshold: [0.55] },
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [index, setActive])
+/* ---- section wrapper ---- (active state is computed from scroll position in App) */
+function Section({ index, active, wide, contentClass = '', children }) {
   return (
-    <section ref={ref} className={`sig-sec ${index === active ? 'on' : ''}`}>
+    <section className={`sig-sec ${index === active ? 'on' : ''}`}>
       <div className={`sig-content ${wide ? 'wide' : ''} ${contentClass}`}>{children}</div>
     </section>
   )
@@ -404,8 +395,45 @@ function Section({ index, active, setActive, wide, contentClass = '', children }
 export default function App() {
   const reduce = useReducedMotion()
   const [active, setActive] = useState(0)
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 920px)').matches,
+  )
   const scrollerRef = useRef(null)
   const goToRef = useRef(null)
+
+  // on mobile the page is a normal scrolling document; the snap scroller only
+  // drives wider viewports, so track the breakpoint and re-bind when it crosses
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 920px)')
+    const on = () => setIsMobile(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+
+  // active beat = the one whose midpoint is nearest the viewport center.
+  // Computed from scroll position (rAF-throttled) so it's exact for both the
+  // desktop snap scroller and mobile native scrolling, and robust for beats
+  // taller than the viewport.
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    let raf = 0
+    const compute = () => {
+      raf = 0
+      const secs = el.querySelectorAll('.sig-sec')
+      const center = el.scrollTop + el.clientHeight / 2
+      let best = 0, bestDist = Infinity
+      secs.forEach((s, i) => {
+        const dist = Math.abs(s.offsetTop + s.offsetHeight / 2 - center)
+        if (dist < bestDist) { bestDist = dist; best = i }
+      })
+      setActive((a) => (a === best ? a : best))
+    }
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(compute) }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    compute()
+    return () => { el.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf) }
+  }, [])
 
   const beats = useMemo(() => ([
     { label: 'ONLINE' }, { label: '01 · OBSERVE' }, { label: '02 · ADAPT' },
@@ -437,7 +465,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     let onWheel, onTS, onTE, touchY = 0, touchBody = null
-    if (!reduce) {
+    if (!reduce && !isMobile) {
       onWheel = (e) => {
         e.preventDefault()
         if (cooling) return
@@ -472,7 +500,7 @@ export default function App() {
       if (onWheel) { el.removeEventListener('wheel', onWheel); el.removeEventListener('touchstart', onTS); el.removeEventListener('touchend', onTE) }
       clearTimeout(cd); goToRef.current = null
     }
-  }, [reduce, total])
+  }, [reduce, total, isMobile])
 
   return (
     <div className="sig" ref={scrollerRef}>

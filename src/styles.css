@@ -281,19 +281,51 @@ body { background: #0b0d12; overflow: hidden; }
   .gauge .g-fill { transition: none; }
 }
 
-/* ---- responsive ---- */
+/* ---- responsive ----
+ * On phones/tablets the snap scroller is dropped: the page becomes a normal
+ * vertically-scrolling document (many beats are taller than a phone viewport,
+ * and centering + a scroll trap clipped them). Beats are natural height and
+ * top-aligned, content is full width, and the signal line becomes a thin
+ * static left rail. The dynamic SVG lane and its node are hidden. */
+.archsvg-scroll { width: 100%; }
+
 @media (max-width: 920px) {
-  .sig { --lane: 64px; }
-  .sig-content { grid-template-columns: 1fr; gap: 30px; padding: 88px 20px 96px 18px; width: calc(100% - var(--lane)); }
+  .sig { --lane: 20px; touch-action: auto; }
+
+  /* native scroll: natural-height, top-aligned, always-visible beats */
+  .sig-sec { min-height: auto; align-items: flex-start; }
+  .sig-content {
+    grid-template-columns: 1fr; gap: 26px;
+    margin-left: 0; width: 100%; max-width: 100%; min-width: 0;
+    padding: 30px 18px 36px 30px;
+    opacity: 1; transform: none; transition: none;
+  }
+  .sig-sec:first-child .sig-content { padding-top: 74px; }
+  .sig-sec:last-child  .sig-content { padding-bottom: 94px; }
+  .sig-main, .sig-aside, .sig-arch, .sig-arch-head,
+  .sig-state, .sig-state-head { min-width: 0; max-width: 100%; }
+
+  /* the signal line → a thin static left rail */
+  .sig-lane {
+    width: 2px; left: 9px;
+    background: linear-gradient(180deg, transparent, var(--line) 5%, var(--line) 95%, transparent);
+  }
+  .sig-lane svg, .sig-dot { display: none; }
+
+  /* wide readouts & diagrams fit the narrow column */
   .sig-content.wide .sig-state { grid-template-columns: 1fr; }
-  .sig-top, .sig-bottom { padding: 12px 16px; background: rgba(11, 13, 18, 0.95); }
+  .sig-content.sig-arch-sec { padding-top: 62px; }
+  .sig-arch { align-self: stretch; }
+  .archsvg-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .archsvg { min-width: 720px; }           /* stays legible — swipe to pan */
+  .td-grid { grid-template-columns: 1fr; } /* stack the dashboard panels */
+  .td { overflow-x: auto; }
+  .sig-mods { grid-template-columns: 1fr; }
+
+  /* bars become solid + tappable */
+  .sig-top, .sig-bottom { padding: 11px 14px; background: rgba(11, 13, 18, 0.94); }
   .sig-top { pointer-events: auto; }
   .sig-top .sub { display: none; }
+  .sig-bottom .r { margin-left: 12px; }
   .sig-hint { display: none; }
-  .sig-mods { grid-template-columns: 1fr; }
-  .sig { touch-action: none; }
-  .sig-content { touch-action: pan-y; }
-}
-@media (max-width: 920px) and (prefers-reduced-motion: reduce) {
-  .sig { touch-action: auto; }
 }
