@@ -114,14 +114,6 @@ const DETECT = [
   { Icon: FiCompass, k: 'Orient', d: 'Builds the context a model would see — the top memory consumers, led by firefox.exe (PID 7612).' },
   { Icon: FiCpu, k: 'Decide', d: 'Checks semantic memory before paying for an LLM call. ChromaDB returns a past fix at 0.992 — reuse it, skip gpt-5-mini.', tag: 'memory hit' },
 ]
-const KERNEL_MODS = [
-  ['risk', 'severity model'],
-  ['gate', 'fail-closed approvals'],
-  ['sanitize', 'command allowlist'],
-  ['audit', 'append-only log'],
-  ['cost', 'daily spend cap'],
-  ['memory', 'structured fix recall'],
-]
 const SOLID = [
   '150+ tests across the decision, safety and tooling layers',
   'The kernel’s platform-independence enforced by an AST boundary test',
@@ -178,11 +170,102 @@ function ProfilesReadout() {
     </div>
   )
 }
-function Shot({ src, alt, cap }) {
+/* Faithful vector rebuild of the OODA control-loop diagram (was a low-res PNG).
+   Inline SVG so it stays crisp at any size. */
+const CL_TOP = [
+  { t: 'Observer', s: 'psutil + WMI' },
+  { t: 'Observe', s: 'anomaly detect' },
+  { t: 'Orient', s: 'build context' },
+  { t: 'Decide', s: 'plan action' },
+  { t: 'HITL', s: 'approve / deny', hex: true },
+  { t: 'Act', s: 'execute' },
+  { t: 'Verify', s: '→ fix memory' },
+]
+const CL_KERNEL = [
+  { t: 'RiskLevel', s: ['severity model'] },
+  { t: 'ApprovalGate', s: ['fail-closed', 'human-in-the-loop'], hi: true },
+  { t: 'Command Sanitizer', s: ['allowlist + denylist'] },
+  { t: 'Audit log', s: ['every action (JSONL)'] },
+  { t: 'Cost ledger', s: ['daily USD cap'] },
+  { t: 'Fix memory', s: ['replay past fixes'] },
+]
+function ControlLoop() {
+  const NW = 150, NT = 112, NH = 62, CY = 143
+  const nx = (i) => 27 + i * 167.5
+  const kx = (i) => 40 + i * 189
   return (
-    <figure className="sig-shot">
-      <img src={src} alt={alt} loading="lazy" />
-      <figcaption>{cap}</figcaption>
+    <figure className="sig-arch">
+      <svg className="archsvg" viewBox="0 0 1200 580" role="img"
+        aria-label="OS Agent OODA control loop: Observer, Observe, Orient, Decide, a human-in-the-loop approval gate, Act and Verify, looping and running on the agentkernel trust substrate — RiskLevel, ApprovalGate, Command Sanitizer, Audit log, Cost ledger and Fix memory.">
+        <defs>
+          <marker id="clah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" className="a-ah" /></marker>
+          <marker id="clahd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" className="a-ahd" /></marker>
+        </defs>
+
+        <text x="24" y="22" className="a-title">OODA control loop</text>
+        <text x="24" y="40" className="a-sub">Observe → Orient → Decide → Act → Verify · a LangGraph state machine</text>
+
+        <path className="a-loop" markerEnd="url(#clahd)" d="M1107,108 C1107,76 500,66 269.5,90 L269.5,104" />
+        <text x="760" y="62" className="a-sub" textAnchor="middle">re-samples every 5–30s</text>
+
+        {CL_TOP.slice(0, -1).map((_, i) => (
+          <line key={`c${i}`} className="a-arrow" markerEnd="url(#clah)" x1={nx(i) + NW} y1={CY} x2={nx(i + 1) - 5} y2={CY} />
+        ))}
+
+        {CL_TOP.map((n, i) => {
+          const x = nx(i), cx = x + NW / 2
+          if (n.hex) {
+            const pts = `${x},${CY} ${x + 22},${NT} ${x + NW - 22},${NT} ${x + NW},${CY} ${x + NW - 22},${NT + NH} ${x + 22},${NT + NH}`
+            return (
+              <g key={i}>
+                <polygon className="a-hex" points={pts} />
+                <text x={cx} y={CY - 3} className="a-nt a-amber" textAnchor="middle">{n.t}</text>
+                <text x={cx} y={CY + 13} className="a-ns a-amber" textAnchor="middle">{n.s}</text>
+              </g>
+            )
+          }
+          return (
+            <g key={i}>
+              <rect className="a-node" x={x} y={NT} width={NW} height={NH} rx="7" />
+              <text x={cx} y={CY - 3} className="a-nt" textAnchor="middle">{n.t}</text>
+              <text x={cx} y={CY + 13} className="a-ns" textAnchor="middle">{n.s}</text>
+            </g>
+          )
+        })}
+
+        <line className="a-arrow" markerEnd="url(#clah)" x1={nx(3) + 75} y1={NT + NH} x2={nx(3) + 75} y2="232" />
+        <line className="a-arrow" markerEnd="url(#clah)" x1={nx(5) + 75} y1={NT + NH} x2={nx(5) + 75} y2="232" />
+
+        <rect className="a-node" x="360" y="235" width="362" height="80" rx="7" />
+        <text x="376" y="261" className="a-nt" textAnchor="start">Decision engine</text>
+        <text x="376" y="283" className="a-ns" textAnchor="start">4-layer: whitelist → blacklist → learned votes → AI</text>
+        <text x="376" y="300" className="a-ns" textAnchor="start">LLM triage gpt-5-mini → gpt-5 · ChromaDB memory reuse</text>
+
+        <rect className="a-node" x="760" y="235" width="422" height="80" rx="7" />
+        <text x="776" y="261" className="a-nt" textAnchor="start">AgentTools</text>
+        <text x="776" y="283" className="a-ns" textAnchor="start">kill · priority · restart · powercfg</text>
+        <text x="776" y="300" className="a-ns" textAnchor="start">sanitized run_command (allowlisted)</text>
+
+        <text x="600" y="344" className="a-mid" textAnchor="middle">OS-domain policy (risk map · allowlist) binds to the kernel below</text>
+
+        <rect className="a-kernel-box" x="20" y="362" width="1160" height="200" rx="10" />
+        <text x="42" y="391" className="a-kernel">agentkernel</text>
+        <text x="156" y="391" className="a-sub">reusable trust substrate — no src/ or platform imports (AST-enforced boundary)</text>
+
+        {CL_KERNEL.map((b, i) => {
+          const x = kx(i), cx = x + 87.5
+          return (
+            <g key={i}>
+              <rect className={b.hi ? 'a-kbox-hi' : 'a-kbox'} x={x} y="410" width="175" height="132" rx="7" />
+              <text x={cx} y={b.s.length > 1 ? 462 : 470} className={`a-kt${b.hi ? ' a-green' : ''}`} textAnchor="middle">{b.t}</text>
+              {b.s.map((line, j) => (
+                <text key={j} x={cx} y={(b.s.length > 1 ? 482 : 490) + j * 16} className="a-ks" textAnchor="middle">{line}</text>
+              ))}
+            </g>
+          )
+        })}
+      </svg>
+      <figcaption>built to be lifted into its own repo unchanged — JARVIS is lined up as its second consumer</figcaption>
     </figure>
   )
 }
@@ -299,7 +382,7 @@ profile: coding · interrupts a download`}</pre>
 }
 
 /* ---- section wrapper (drives active state) ---- */
-function Section({ index, active, setActive, wide, children }) {
+function Section({ index, active, setActive, wide, contentClass = '', children }) {
   const ref = useRef(null)
   useEffect(() => {
     const el = ref.current
@@ -313,7 +396,7 @@ function Section({ index, active, setActive, wide, children }) {
   }, [index, setActive])
   return (
     <section ref={ref} className={`sig-sec ${index === active ? 'on' : ''}`}>
-      <div className={`sig-content ${wide ? 'wide' : ''}`}>{children}</div>
+      <div className={`sig-content ${wide ? 'wide' : ''} ${contentClass}`}>{children}</div>
     </section>
   )
 }
@@ -321,7 +404,6 @@ function Section({ index, active, setActive, wide, children }) {
 export default function App() {
   const reduce = useReducedMotion()
   const [active, setActive] = useState(0)
-  const [clock, setClock] = useState('')
   const scrollerRef = useRef(null)
   const goToRef = useRef(null)
 
@@ -392,11 +474,6 @@ export default function App() {
     }
   }, [reduce, total])
 
-  useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
-  }, [])
-
   return (
     <div className="sig" ref={scrollerRef}>
       <div className="sig-field" aria-hidden="true" />
@@ -406,7 +483,6 @@ export default function App() {
         <span className="brand">OS&nbsp;AGENT</span>
         <span className="sub">self-optimizing daemon</span>
         <a className="top-link" href={LINKS.github} target="_blank" rel="noreferrer"><FiGithub /> source</a>
-        <span className="clk">{clock}</span>
       </header>
 
       {/* 00 — intro */}
@@ -482,17 +558,13 @@ export default function App() {
       </Section>
 
       {/* 05 — the kernel */}
-      <Section index={5} active={active} setActive={setActive}>
-        <div className="sig-main">
+      <Section index={5} active={active} setActive={setActive} wide contentClass="sig-arch-sec">
+        <div className="sig-arch-head">
           <div className="sig-eyebrow">05 · the kernel</div>
           <h2 className="sig-h2">The part I'm proudest of: a <span className="g">trust vault</span>.</h2>
-          <p>The safety machinery lives in <code>agentkernel/</code> — a platform-agnostic substrate with zero dependency on the Windows code, enforced by an AST boundary test. Six small pieces an LLM-driven agent needs before it may touch a live system:</p>
-          <div className="sig-mods">
-            {KERNEL_MODS.map(([k, v]) => <div key={k} className="mod"><span className="m-k">{k}</span><span className="m-v">{v}</span></div>)}
-          </div>
-          <p className="muted-p">Built to be lifted into its own repo unchanged — my voice assistant is lined up as its second consumer.</p>
+          <p>The safety machinery lives in <code>agentkernel/</code> — a platform-agnostic trust substrate with zero dependency on the Windows code, enforced by an AST boundary test. The whole loop runs on top of it.</p>
         </div>
-        <div className="sig-aside"><Shot src="/architecture.png" alt="OS Agent architecture: the OODA control loop over the agentkernel trust substrate" cap="the control loop over the kernel" /></div>
+        <ControlLoop />
       </Section>
 
       {/* 06 — honest state */}
@@ -529,7 +601,7 @@ export default function App() {
       </Section>
 
       <footer className="sig-bottom">
-        <span className="live"><FiShield /> fail-closed</span>
+        <span className="live"><FiShield /> asks before acting</span>
         <span className="lbl">{beats[active].label}</span>
         <span className="r">{String(active + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}</span>
       </footer>
