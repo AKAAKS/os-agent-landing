@@ -58,6 +58,9 @@
   --serif: 'Source Serif 4', Georgia, serif;
   --mono:  'IBM Plex Mono', ui-monospace, monospace;
 
+  /* the top and bottom bleed a phone's trim marks sit in: the mark is 28px
+   * and is inset 10px, so 44px leaves it 6px of clearance from any text */
+  --bleed: 44px;
   --maxw: 68ch;          /* the measure: ~68 characters of serif */
   --margin: 15rem;       /* the marginal column, where notes live */
   --col: calc(var(--margin) + 2rem);  /* where the text column starts */
@@ -478,6 +481,29 @@ h3.sub {
    * appendix into 56,000px of scrolling and made two adjacent records hard
    * to tell apart. The wrapper scrolls, the document does not. */
   .ledger .l-msg { white-space: nowrap; }
+}
+
+/* ---- the sheet has no margins on a phone ----
+ * A trim mark sits 12px in and is 28px across, so it occupies the first 40px
+ * of each edge. The text column's edge is at max(--gut, (100vw - --maxw) / 2),
+ * which falls below 40px once the viewport is narrower than --maxw + 2 x 40px
+ * = 704px. Below that, a viewport-fixed frame has nowhere to live: the top
+ * marks ran straight through the masthead and the title, and the bottom pair
+ * were never seen at all, because they sat at the bottom of the VIEWPORT and
+ * every banded section paints over a layer at z-index -1.
+ *
+ * So below 44rem the marks stop being a frame around the window and become
+ * what they are on paper: four marks at the corners of the SHEET. The layer is
+ * absolute over the whole document, and the body carries a top and bottom
+ * bleed for them to sit in, clear of any text. */
+@media (max-width: 44rem) {
+  body { position: relative; padding-block: var(--bleed); }
+  .sheet-trim {
+    position: absolute; inset: 0; height: 100%;
+    background-position:
+      left 10px top 10px, right 10px top 10px,
+      left 10px bottom 10px, right 10px bottom 10px;
+  }
 }
 
 @media (max-width: 30rem) {

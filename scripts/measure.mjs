@@ -92,6 +92,11 @@ for (const [w, h, label] of SIZES) {
       dim,
       ground: getComputedStyle(document.body).backgroundColor,
       ledgerRows: document.querySelectorAll('.ledger tbody tr').length,
+      /* trim marks: where they are anchored, and how much clear edge the
+       * narrowest text column leaves them */
+      trim: getComputedStyle(document.querySelector('.sheet-trim')).position,
+      textEdge: Math.round(parseFloat(getComputedStyle(document.querySelector('.masthead')).paddingLeft)),
+      bleed: Math.round(parseFloat(getComputedStyle(document.body).paddingTop)),
       textCentreOffset: (() => {
         const p = document.querySelector('.clause p')
         if (!p) return null
@@ -119,6 +124,18 @@ for (const [w, h, label] of SIZES) {
     if (r < 7) bad.push(`${sel} at ${r.toFixed(2)}:1 — secondary text must stay above 7:1`)
   }
   if (m.ledgerRows !== EXPECTED_ROWS) bad.push(`appendix has ${m.ledgerRows} rows; the selection rule over the ledger gives ${EXPECTED_ROWS}`)
+  /* A trim mark is inset 12px and 28px across, so it owns the first 40px of an
+   * edge. Fixed to the viewport it is a frame; that is only legitimate while
+   * the text leaves that 40px clear, otherwise the marks run through the
+   * masthead. Narrower than that, the layer must be anchored to the document
+   * and the body must carry a bleed for the marks to sit in. */
+  const TRIM = 40
+  if (m.trim === 'fixed' && m.textEdge < TRIM) {
+    bad.push(`trim marks are fixed to the viewport but text starts at ${m.textEdge}px, inside the ${TRIM}px they occupy`)
+  }
+  if (m.trim === 'absolute' && m.bleed < TRIM) {
+    bad.push(`trim marks are anchored to the sheet but the bleed is only ${m.bleed}px — they will sit on text`)
+  }
   // the measure must be centred in the viewport wherever there is room for it
   if (m.textCentreOffset !== null && Math.abs(m.textCentreOffset) > 1) {
     bad.push(`the text column's centre is ${m.textCentreOffset}px off the viewport centre`)
@@ -131,6 +148,7 @@ for (const [w, h, label] of SIZES) {
     `text ${contrast.toFixed(2)}:1 · dim ${dimWorst.toFixed(2)}:1 · ` +
     `centre ${m.textCentreOffset === null ? 'n/a' : m.textCentreOffset + 'px'} · ` +
     `ledger ${m.ledgerRows} rows${m.ledgerScrolls ? ' (pans)' : ''}`,
+    `trim ${m.trim === 'fixed' ? `window, text at ${m.textEdge}px` : `sheet, ${m.bleed}px bleed`}`,
   )
   for (const b of bad) console.log(`     FAIL  ${b}`)
 }
