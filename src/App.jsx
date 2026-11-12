@@ -98,7 +98,7 @@ function Figure1() {
   return (
     <figure className="fig">
       <svg viewBox="0 0 920 300" role="img"
-        aria-label="The OODA control loop — Observe, Orient, Decide, a fail-closed approval gate, Act, Verify — running on top of the agentkernel trust substrate: RiskLevel, ApprovalGate, CommandSanitizer, audit log, cost ledger and FixMemory.">
+        aria-label="The OODA control loop (Observe, Orient, Decide, a fail-closed approval gate, Act, Verify) running on top of the agentkernel trust substrate: RiskLevel, ApprovalGate, CommandSanitizer, audit log, cost ledger and FixMemory.">
         <defs>
           <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
             <path d="M0,0 L7,3 L0,6" className="f-ah" />
@@ -228,7 +228,9 @@ export default function App() {
 
   return (
     <>
-      {/* the sheet itself: tooth, margin rule, trim marks. See styles.css. */}
+      {/* the sheet itself: tooth, trim marks. The signatures are the sections'
+        * own background-color and the press marks are at the end of the
+        * document, both for reasons styles.css gives. */}
       <div className="sheet-tooth" aria-hidden="true" />
       <div className="sheet-trim" aria-hidden="true" />
 
@@ -248,8 +250,8 @@ export default function App() {
           </Note>
           <p className="standfirst">
             A background daemon that watches a Windows machine and is permitted to change
-            it — set a process priority, kill a process, switch the power plan, restart a
-            service, edit the registry. This is the manual: what it does, what stops it,
+            it. It may set a process priority, kill a process, switch the power plan,
+            restart a service, edit the registry. This is the manual: what it does, what stops it,
             and what it has actually done.
           </p>
 
@@ -262,17 +264,17 @@ export default function App() {
                 <li>Trim idle working sets</li>
                 <li>Kill a process that is on the profile&rsquo;s kill-candidate list</li>
                 <li>Run a command from a narrow allowlist of executables</li>
-                <li>Append to its own audit log — always, including dry runs</li>
+                <li>Always appends to its own audit log, including dry runs</li>
               </ul>
             </div>
             <div>
               <h3>What it may not</h3>
               <ul>
-                <li>Kill anything on the global whitelist — <code>explorer</code>, <code>csrss</code>,
+                <li>Kill anything on the global whitelist: <code>explorer</code>, <code>csrss</code>,
                   <code>winlogon</code>, <code>services</code>, <code>svchost</code>, <code>lsass</code>,
                   <code>dwm</code>, <code>System</code>, <code>smss</code></li>
                 <li>Kill a user application that has unsaved state</li>
-                <li>Run a shell interpreter — <code>powershell</code> and <code>cmd</code> were
+                <li>Run a shell interpreter; <code>powershell</code> and <code>cmd</code> were
                   removed from the allowlist, not blocklisted</li>
                 <li>Approve its own gated actions when running headless</li>
                 <li>Acquire privileges it wasn&rsquo;t started with; without admin it fails and says so</li>
@@ -285,7 +287,7 @@ export default function App() {
             It has recorded {int(totals.records)} actions across {span.activeDays} days
             between {longDate(span.from)} and {longDate(span.to)}. They come down to{' '}
             {ledgerRows.length} distinct outcomes, bound in as{' '}
-            <a href="#appendix">Appendix&nbsp;A</a> — each one a real dated record, none
+            <a href="#appendix">Appendix&nbsp;A</a>, each one a real dated record, none
             of them paraphrased.
           </p>
 
@@ -301,7 +303,7 @@ export default function App() {
           <p>
             An observer loop samples the machine on a fixed cadence, with background
             threads beside it for profile detection, Bluetooth, audio suggestions and a
-            watchdog — the last two only start if those features are switched on. Each
+            watchdog; the last two only start if those features are switched on. Each
             signal has a trip threshold and a shared cooldown, so a machine that is
             briefly busy is not a machine in trouble. Every threshold below is read at
             build time from the agent&rsquo;s own <code>config/settings.yaml</code>.
@@ -332,7 +334,7 @@ export default function App() {
         <Clause n="2" title="How it decides">
           <p>
             A decision climbs a ladder, cheapest rung first, and most decisions never
-            reach the top of it. Config whitelist or blacklist — instant and certain.
+            reach the top of it. Config whitelist or blacklist: instant and certain.
             Then the profile&rsquo;s own rules. Then what the machine has learned from
             past fixes. Only a genuinely unknown case reaches a model.
           </p>
@@ -356,7 +358,7 @@ export default function App() {
           <Box kind="war" title="897 wasted calls to diagnose a flaky Bluetooth mouse">
             <p>
               An earlier build escalated every Bluetooth event to the model. One twitchy
-              device produced a flood — nearly 900 paid calls to be told, repeatedly, that
+              device produced a flood: nearly 900 paid calls to be told, repeatedly, that
               a mouse had disconnected. The fix was not a better prompt. It was not calling
               the model: stricter event classification, and a cooldown.
             </p>
@@ -383,7 +385,7 @@ export default function App() {
           </Note>
           <Quoted q={quotes.headless} />
           <p>
-            That is the daemon&rsquo;s normal condition — it runs from a logon-triggered
+            That is the daemon&rsquo;s normal condition: it runs from a logon-triggered
             scheduled task, with no console. Headless, it denies every gated action.
             The cost of that choice is real and is stated in <a href="#s7">§7</a>.
           </p>
@@ -392,7 +394,7 @@ export default function App() {
             <p>
               The gate had an ordering bug: it asked &ldquo;is this risk level
               auto-approvable?&rdquo; <i>before</i> it asked &ldquo;is this action
-              inherently dangerous?&rdquo; Anything labelled low sailed through — and two
+              inherently dangerous?&rdquo; Anything labelled low sailed through, and two
               other bugs forced risky actions to be labelled low. The three most dangerous
               actions never triggered the human prompt, while the documentation claimed
               they always required approval. Two independent controls failing in the same
@@ -402,7 +404,7 @@ export default function App() {
 
           <Box kind="war" title="The allowlist with a loaded gun on it">
             <p>
-              The command filter allowlisted executables — correct — but{' '}
+              The command filter allowlisted executables (correct), but{' '}
               <code>powershell.exe</code> and <code>cmd.exe</code> were on the list, with a
               blocklist of frightening substrings behind them. PowerShell is a programming
               language; <code>Remove-Item -Recurse -Force</code> was never on the
@@ -413,8 +415,8 @@ export default function App() {
 
           <Box kind="gotcha" title="Allowlisting a shell is allowlisting everything">
             <p>
-              Any general-purpose interpreter — <code>powershell</code>, <code>cmd</code>,{' '}
-              <code>python</code>, <code>bash</code>, <code>wmic</code> — can express
+              Any general-purpose interpreter (<code>powershell</code>, <code>cmd</code>,{' '}
+              <code>python</code>, <code>bash</code>, <code>wmic</code>) can express
               arbitrary behaviour. The only safe primitives are narrow and structured:
               &ldquo;kill this PID&rdquo;, not &ldquo;run this string&rdquo;.
             </p>
@@ -423,7 +425,7 @@ export default function App() {
           <Box kind="war" title="Auto-disabling the antivirus to boost a framerate">
             <p>
               One profile action fired automatically on game launch and ran{' '}
-              <code>Set-MpPreference -DisableRealtimeMonitoring $true</code> — silently
+              <code>Set-MpPreference -DisableRealtimeMonitoring $true</code>, silently
               turning off Defender&rsquo;s real-time protection. No prompt, no undo, no
               audit entry. It was deleted rather than gated. Some capabilities should not
               exist.
@@ -435,7 +437,7 @@ export default function App() {
         <Clause n="4" title="What it has actually done">
           <p>
             Everything below is counted from the agent&rsquo;s own{' '}
-            <code>data/actions.jsonl</code> — all {int(totals.records)} records of it.
+            <code>data/actions.jsonl</code>, all {int(totals.records)} records of it.
           </p>
 
           <div className="figures">
@@ -515,8 +517,8 @@ trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} 
               Reuse looked clever and hid three sins: it <i>forced</i> the risk level to
               low, so the gate waved it through; it re-derived the action by keyword-matching
               stored prose; and it treated a {settings.similarity_threshold} text match as
-              proof that two situations were identical. The most frequent path — the cache
-              hit — was the least scrutinised one, which is exactly backwards.
+              proof that two situations were identical. The most frequent path, the cache
+              hit, was the least scrutinised one, which is exactly backwards.
             </p>
           </Box>
 
@@ -542,7 +544,7 @@ trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} 
           <Box kind="gotcha" title="Learning bakes in whatever you did, including the mistakes">
             <p>
               A memory of past fixes is a memory of past judgement. If a bad fix is stored
-              once, it is replayed every time the problem looks similar enough — and the
+              once, it is replayed every time the problem looks similar enough, and the
               replay path is the one least likely to be watched.
             </p>
           </Box>
@@ -551,9 +553,9 @@ trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} 
         {/* ---- §6 --------------------------------------------------------- */}
         <Clause n="6" title="The part that is meant to outlive the project">
           <p>
-            The safety machinery lives in <code>agentkernel/</code> — risk scoring, the
+            The safety machinery lives in <code>agentkernel/</code> (risk scoring, the
             approval gate, the command sanitizer, the audit log, the cost ledger, the fix
-            memory — as a package that knows nothing about Windows or about this
+            memory) as a package that knows nothing about Windows or about this
             application. That is not a convention politely observed. A test walks the
             kernel&rsquo;s imports and fails the build if any of them reach back into the
             app, which is the only version of that promise worth making.
@@ -588,8 +590,8 @@ trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} 
               unavailable unless you are sitting at a console.
             </li>
             <li>
-              <b>It watches the GPU but has never acted on it.</b> The threshold is live —
-              <code> gpu_high</code> anomalies are raised and reach the loop — but no GPU
+              <b>It watches the GPU but has never acted on it.</b> The threshold is live,
+              <code> gpu_high</code> anomalies are raised and reach the loop, but no GPU
               action appears anywhere in {int(totals.records)} ledger records, and the
               ledger is the only evidence that counts.
             </li>
@@ -625,12 +627,12 @@ trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} 
             to {ledgerRows.length} distinct outcomes. This is all {ledgerRows.length} of
             them, oldest first, each one the real record of the first time it happened
             and how often it has recurred since. Nothing the agent has ever done is
-            missing from this table — only the repetitions are, and those are counted in
+            missing from this table; only the repetitions are, and those are counted in
             the last column. The whole file is <a href={LINKS.ledger}>one click away</a>.
           </p>
           <p>
             No line is paraphrased. {redactionsShown === 1 ? 'One row reads' : `${redactionsShown} rows read`}{' '}
-            <code>[a private app]</code> where a process name is withheld —{' '}
+            <code>[a private app]</code> where a process name is withheld,{' '}
             {redactions} of the {int(totals.records)} records across the whole file. The
             cut is marked so you can see exactly what was taken out, and that nothing
             else was.
@@ -649,7 +651,7 @@ trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} 
           <p>
             Every line in Appendix A is real and was written by the agent. The
             arrangement is mine: nothing on the owner&rsquo;s own machine prints this
-            ledger as a table, or next to the manual — that is this page&rsquo;s doing.
+            ledger as a table, or next to the manual; that is this page&rsquo;s doing.
           </p>
           <p>
             Every figure here is computed from that data at build time by{' '}
@@ -672,6 +674,15 @@ trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} 
           <p className="sign">Akshit Kartik</p>
         </section>
       </main>
+
+      {/* The press marks are LAST in the document, and that is load-bearing —
+        * see styles.css: every z-index that should have put them above the
+        * banded sections failed to, because <main> is positioned, auto and 0
+        * paint in the same group, and DOM order then decides. */}
+      <div className="sheet-press" aria-hidden="true">
+        <span className="sheet-reg" />
+        <span className="sheet-wedge" />
+      </div>
     </>
   )
 }

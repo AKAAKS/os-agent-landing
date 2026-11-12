@@ -45,9 +45,25 @@ viewport's at every size.
 
 The ground was flat cream and read as unfinished. Everything added is real
 furniture of a printed sheet and nothing else qualifies: the stock has **tooth**
-(tiled `feTurbulence` at 5%), the marginal column is **ruled**, and the sheet
-carries **trim marks** at its four corners. No gradient, no shadow, no glow —
+(tiled `feTurbulence` at 5%), the marginal column is **ruled**, the sheet carries
+**trim marks** at its four corners, the stock changes shade every two sections
+(**signatures**, because a bound manual is gathered sheets and gathers are not
+all cut from one patch), and the side bleed carries **press marks** — a
+registration target and a step wedge of tints. No gradient, no shadow, no glow;
 those would be a photograph of paper rather than paper.
+
+Those last two came out of a spike that built eight candidate grounds and threw
+six away. The ones that lost are worth knowing about, because each failed for a
+reason that will come back:
+
+| | | why it lost |
+|---|---|---|
+| a | day ticks in the gutter, one per active day | real data, and it looked good, but it puts something in the margin that asks to be read, next to notes that are already asking |
+| b | running heads and folios | the running head lands directly above the clause number, so `§2 · HOW IT DECIDES` sits on top of `§2`. A running head belongs at the top of a *page*, and this page has no pages |
+| c | ledger ruling | superseded by `g`, which is the same idea finished |
+| e | tooth at 9% plus a fold crease | effectively a no-op; 9% does not read on screen and the crease is indistinguishable from the margin rule it brackets |
+| f | thumb index down the right field | works, and it is the only thing that ever filled the right field, but at a readable weight it is much louder than anything else on the page |
+| g | engineering quadrille | the strongest loser. Still the first thing to try if the ground ever needs more |
 
 | Question | A manual answers |
 |---|---|
@@ -192,6 +208,34 @@ omission:
 - **Anything hanging into the marginal column needs `clear: left`.** A margin
   note is a left float in that column; the figure and the appendix table hang
   into the same space and overlapped it until they cleared.
+- **A custom property holding TWO gradients corrupts every later background
+  layer.** The `background-*` longhands are matched to `background-image` by
+  index and then cycled, so a two-gradient property pushes the next layer onto
+  the wrong size and position. In the spike this drew a whole quadrille inside
+  an 11px column, which reads as *absent* rather than as broken. One property
+  per layer, one entry per list.
+- **Anything positioned with `--maxw` resolves against its own font.** `--maxw`
+  is `68ch`, so the padding expression that centres the measure comes out
+  differently on every element set in a different face. The masthead was set in
+  11px mono and sat **88px** right of the body column at every width over
+  1216px, and had shipped that way. `measure` now compares the two edges
+  instead of assuming they agree. An element that positions itself with `--maxw`
+  must inherit the body serif; if it needs its own font, put the font on its
+  children.
+- **`z-index: 0` does not put a fixed layer above the page.** `-1` is painted
+  over by any section with its own ground (this is why the trim marks used to
+  vanish at the appendix). `0` fails too: `<main>` is positioned, `auto` and `0`
+  paint in the same group, and DOM order then decides. The press marks are the
+  **last element in the document** instead. Do not move them back up the tree.
+- **A specificity win can silently undo another rule's ground.** The signature
+  selector outranks `.colophon`, so turning signatures on took the colophon's
+  `--stock-3` away and replaced it with `--sig`. The appendix and the colophon
+  are excluded by name, and `measure` asserts all three grounds separately.
+- **The leftmost thing on the page is the marginal column, not the measure.**
+  The press marks were checked against the text column and looked safe by 264px
+  while overlapping a margin note by 8px at 1216px. Their breakpoint is derived
+  from the notes (78rem = `--maxw` + 2 × (`--col` + 40)), and the check compares
+  against whichever is further left.
 - **The og:image is invalidated by any look change.** Regenerate it in the
   same commit (`npm run og`), or the card advertises the old page for weeks.
   `twitter:card` must stay `summary_large_image`; plain `summary` crops to a
@@ -254,6 +298,13 @@ command that checks it and run it.
   quoted line in serif erases the distinction the page is built on.
 
 ---
+
+- **Signatures and press marks are not decoration and have tests.** `measure`
+  asserts that some section actually carries `--sig` (a ground rule that matches
+  nothing is not a ground), that the appendix and colophon keep their own
+  stocks, and that both press marks sit clear of all content or are not shown
+  at all. The marks are **removed** below 78rem rather than moved or shrunk: a
+  press mark that has to dodge the page is not a press mark.
 
 ## Re-verify before every publish
 

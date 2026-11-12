@@ -65,6 +65,25 @@
   --margin: 15rem;       /* the marginal column, where notes live */
   --col: calc(var(--margin) + 2rem);  /* where the text column starts */
   --gut: 1.25rem;
+
+  /* The section's left padding, as a variable, so the spike's layers can line
+   * up with the gutter without re-typing the expression.
+   *
+   * TWO things resolve late in here and both bit. The 100% resolves against
+   * the USING element's containing block, and --maxw is 68ch, so the whole
+   * expression resolves against the USING element's FONT. Ground A set itself
+   * in 9px mono, 68ch came out 367px instead of 624px, and the comb landed
+   * 128px right of where it belonged - on top of the body copy.
+   *
+   * So: only an element inheriting the body's serif at full size may position
+   * itself with this. Anything that sets its own font positions itself by
+   * --col and --margin, which are rem, or hangs off a float like .note. */
+  --pad-l: max(calc(var(--gut) + var(--col)), calc((100% - var(--maxw)) / 2));
+
+  /* The shade a signature turns. One step off --stock, half the distance to
+   * --stock-2, because this has to be a different batch of the same paper and
+   * not a different paper: at --stock-2 the sections read as callouts. */
+  --sig:       #EEEBE2;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -175,11 +194,22 @@ main > section {
    * As a background layer it sits under everything in the section and above
    * nothing, so content occludes it for free and a banded section still draws
    * its own. */
+  /* Three layers, two of them switched off, because ground C (ruling) and
+   * ground E's crease have the same constraint the margin rule does: a fixed
+   * layer behind the page is painted over by any section with a background.
+   * Composing them as named custom properties keeps one background shorthand
+   * instead of four competing rules, and `none` is a legal image layer. */
+  /* If a second layer is ever added here, give it its own custom property and
+   * its own entry in every longhand list. The longhands are matched to
+   * background-image BY INDEX and then cycled, so one property holding two
+   * gradients silently pushes every later layer onto the wrong size and
+   * position. The background spike lost a whole quadrille that way: its
+   * verticals inherited an 11px-wide repeat-y slot and were drawn inside an
+   * 11px column, which reads as absent rather than as broken. */
   background-image: linear-gradient(to right, var(--rule) 0 1px, transparent 1px);
   background-repeat: repeat-y;
   background-size: 1px 100%;
-  background-position-x: calc(max(calc(var(--gut) + var(--col)), calc((100% - var(--maxw)) / 2)) - 1rem);
-  background-position-y: 0;
+  background-position: calc(var(--pad-l) - 1rem) 0;
 }
 
 /* The text column is offset by the marginal column; notes pull back into it.
@@ -197,17 +227,31 @@ main > section {
   margin-left: calc(-1 * var(--col));
 }
 
-/* ---- masthead ---- */
+/* ---- masthead ----
+ * The font goes on the PARAGRAPHS, not on this element, and that is load-
+ * bearing. --maxw is 68ch, so the padding expression below resolves against
+ * whatever font this element is set in. With mono 11px on the masthead itself,
+ * 68ch came out 449px instead of 624px, the padding came out 88px too large,
+ * and the masthead sat 88px right of the body column at every width over
+ * 1216px — measured 496px against the title's 408px at 1440. It had shipped
+ * that way and reads as a small misalignment rather than as a bug, which is
+ * why it survived a line-by-line review.
+ *
+ * RULE: an element that positions itself with --maxw must inherit the body's
+ * serif. If it needs its own font, the font goes on its children. */
 .masthead {
   display: flex; justify-content: space-between; gap: 1rem;
   border-bottom: 1px solid var(--rule-hard);
   padding-block: 0.6rem;
   padding-left: max(calc(var(--gut) + var(--col)), calc((100% - var(--maxw)) / 2));
   padding-right: max(var(--gut), calc((100% - var(--maxw)) / 2));
-  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--ink-mid);
+  color: var(--ink-mid);
 }
-.masthead p { margin-block: 0; }
+.masthead p {
+  margin-block: 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
 
 /* ---- title page ----
  * Deliberately shorter than a viewport: a reader who clicked a link already
@@ -377,10 +421,15 @@ h3.sub {
  * it a control adds the behaviour the form implied rather than a widget a
  * manual has no place for. Ticked = ink in the box, which is also the one
  * state change on this page that is not a hover. */
+/* Same rule as the masthead: #appendix .legend is capped at var(--maxw), so
+ * the mono goes on the swatches rather than on the row, or the legend wraps at
+ * 449px instead of at the measure. */
 .legend {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.2rem;
-  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
   margin-block: 1.2rem 0.2rem;
+}
+.sw, .sw-n, .legend-count {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
 }
 .sw {
   display: inline-flex; align-items: center; gap: 0.5rem;
@@ -405,6 +454,69 @@ h3.sub {
  * margin on a wrapped flex line shoves the count into the middle of nowhere */
 .legend-count { color: var(--ink-mid); padding-left: 0.4rem; }
 #appendix .sw.on::before { box-shadow: inset 0 0 0 2px var(--stock-2), inset 0 0 0 11px currentColor; }
+
+/* ---- signatures ----
+ * A bound manual is gathered sheets, not one roll, and gathers are not all cut
+ * from the same patch of stock. The shade changes every two sections, so the
+ * document reads as sheets 3 and 4 having come off the press together.
+ *
+ * background-COLOR, never the `background` shorthand: the sections' background
+ * IMAGE carries the margin rule, and the shorthand would wipe it. Same class
+ * of mistake as the `margin` shorthand resetting margin-left, which also
+ * shipped once.
+ *
+ * The appendix and the colophon are excluded BY NAME. They already carry
+ * --stock-2 and --stock-3, and this selector outranks `.colophon` on
+ * specificity, so without the exclusion the colophon silently lost its darker
+ * ground — one rule quietly undoing another two hundred lines away. */
+main > section:nth-of-type(4n+2):not(#appendix):not(.colophon),
+main > section:nth-of-type(4n+3):not(#appendix):not(.colophon) {
+  background-color: var(--sig);
+}
+
+/* ---- press marks ----
+ * A registration target in the left bleed and a step wedge of tints in the
+ * right one, out past the trim marks where the sheet gets cut off. They are
+ * the furniture a press sheet carries outside the trim, and they cost the
+ * content nothing, which is the whole argument for them: an earlier attempt
+ * added weight behind the text instead and read as nothing at all.
+ *
+ * THE SIDE bleed, not the top and bottom one. On paper the furniture goes
+ * above and below the trim; on screen the top of the window is the masthead
+ * and the bottom of it is the middle of a paragraph, and the first version ran
+ * the step wedge straight through a line of body copy. The side fields are
+ * 488px of nothing at 1600px, which is where this can live without lying about
+ * where it would be on a press sheet.
+ *
+ * PAINT ORDER, which was wrong twice. z-index: -1 is painted over by any
+ * section with a ground of its own — the same fault that used to make the trim
+ * marks vanish at the appendix. z-index: 0 did not fix it either, because a
+ * positioned <main> has z-index auto, auto and 0 paint in the same group, and
+ * DOM order then decides. This is the LAST element in the document instead,
+ * which is the version of "above the page" that does not depend on reading the
+ * z-index rules correctly. Do not move it back up the tree. */
+.sheet-press { position: fixed; inset: 0; pointer-events: none; }
+.sheet-press > * { position: absolute; }
+/* 22px tall, so half of it is 11px. Centred by arithmetic, not by a transform:
+ * there is no transform anywhere else in this file and this is not the place
+ * to introduce the first one. */
+.sheet-reg {
+  left: 10px; top: calc(50% - 11px); width: 22px; height: 22px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Cg stroke='%239E9684' fill='none'%3E%3Ccircle cx='11' cy='11' r='6'/%3E%3Cpath d='M11 0V22M0 11H22'/%3E%3C/g%3E%3C/svg%3E") no-repeat;
+}
+/* Framed, and that is not decoration. The lightest step in the wedge IS
+ * --stock, invisible against the stock and very nearly invisible against a
+ * signature's shade; a tint wedge whose top step cannot be seen is not telling
+ * anyone anything. A real press sheet's wedge is framed for the same reason. */
+.sheet-wedge {
+  right: 10px; top: calc(50% - 66px); width: 9px; height: 132px;
+  border: 1px solid var(--rule-hard);
+  background: linear-gradient(to bottom,
+    var(--stock)     0 16.25px, var(--stock-2)   16.25px 32.5px,
+    var(--stock-3)   32.5px 48.75px, var(--rule) 48.75px 65px,
+    var(--rule-hard) 65px 81.25px, var(--ink-mid) 81.25px 97.5px,
+    var(--ink)       97.5px 113.75px, var(--warstory) 113.75px 130px);
+}
 
 /* ---- appendix A ----
  * All 564 rows, in file order, always present in the DOM. Nothing here reveals
@@ -461,6 +573,7 @@ h3.sub {
   /* no marginal column at this width, so nothing hangs and nothing pulls —
    * and no rule, because there is nothing for it to divide */
   :root { --margin: 0rem; --col: 0rem; }
+  /* no marginal column at this width, so nothing for the rule to divide */
   main > section { background-image: none; }
   body { font-size: 17px; }
   .clause h2, .colophon h2 { display: block; }
@@ -481,6 +594,24 @@ h3.sub {
    * appendix into 56,000px of scrolling and made two adjacent records hard
    * to tell apart. The wrapper scrolls, the document does not. */
   .ledger .l-msg { white-space: nowrap; }
+}
+
+/* ---- the press marks need a real bleed, which is wider than it looks ----
+ * 78rem = 1248px, DERIVED. A mark is inset 10px and is 22px across, so it owns
+ * the first 32px of the edge; 40px leaves it 8px of clearance. The leftmost
+ * thing on the page is not the measure, it is the MARGINAL COLUMN, whose left
+ * edge sits at (100% - --maxw) / 2 - --col. That clears 40px only once
+ * 100% >= --maxw + 2 x (--col + 40) = 624 + 2 x 312 = 1248px.
+ *
+ * Measuring against the measure instead of against the notes is how this was
+ * nearly shipped overlapping: at 1216px the registration mark ends at 32px and
+ * a margin note starts at 24px, so the two share 8px of column, and the text
+ * column was a comfortable 264px away the whole time.
+ *
+ * Below this the marks are REMOVED, not moved or shrunk. A press mark that has
+ * to dodge the page is not a press mark. */
+@media (max-width: 78rem) {
+  .sheet-press { display: none; }
 }
 
 /* ---- the sheet has no margins on a phone ----

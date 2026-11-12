@@ -97,6 +97,12 @@ for (const [w, h, label] of SIZES) {
       trim: getComputedStyle(document.querySelector('.sheet-trim')).position,
       textEdge: Math.round(parseFloat(getComputedStyle(document.querySelector('.masthead')).paddingLeft)),
       bleed: Math.round(parseFloat(getComputedStyle(document.body).paddingTop)),
+      /* the masthead and the body column compute the SAME padding expression.
+       * They are separate elements, so they can silently disagree — and did,
+       * by 88px, because the expression contains 68ch and the masthead was set
+       * in mono. Compared rather than assumed for exactly that reason. */
+      mastheadEdge: Math.round(parseFloat(getComputedStyle(document.querySelector('.masthead')).paddingLeft)),
+      columnEdge: Math.round(parseFloat(getComputedStyle(document.querySelector('main > section')).paddingLeft)),
       textCentreOffset: (() => {
         const p = document.querySelector('.clause p')
         if (!p) return null
@@ -104,6 +110,42 @@ for (const [w, h, label] of SIZES) {
         // only meaningful where the viewport is wide enough to centre at all
         if (innerWidth < r.width + 2 * 20) return null
         return Math.round((r.left + r.right) / 2 - innerWidth / 2)
+      })(),
+      /* The press marks live in the side bleed. Measured against the text
+       * column rather than assumed, because the first version of them ran the
+       * step wedge through a line of body copy. */
+      press: (() => {
+        const e = document.querySelector('.sheet-press')
+        if (getComputedStyle(e).display === 'none') return null
+        const col = document.querySelector('.clause p').getBoundingClientRect()
+        /* compared against the NOTES, not the measure: the marginal column is
+         * the leftmost thing on the page and it is 272px further out */
+        const notes = [...document.querySelectorAll('.note')].map((n) => n.getBoundingClientRect())
+        const reg = document.querySelector('.sheet-reg').getBoundingClientRect()
+        const wed = document.querySelector('.sheet-wedge').getBoundingClientRect()
+        return { regRight: Math.round(reg.right), wedgeLeft: Math.round(wed.left),
+                 colLeft: Math.round(Math.min(col.left, ...notes.map((n) => n.left))),
+                 colRight: Math.round(col.right) }
+      })(),
+      /* Signatures. Three separate claims, because the rule has failed in two
+       * directions already: it must actually tint something (a rule that
+       * matches nothing is not a ground), and it must NOT reach the appendix
+       * or the colophon, which have grounds of their own and which this
+       * selector outranks on specificity. */
+      sig: (() => {
+        const want = getComputedStyle(document.documentElement).getPropertyValue('--sig').trim()
+        const hex = (c) => '#' + c.match(/\d+/g).slice(0, 3)
+          .map((n) => Number(n).toString(16).padStart(2, '0')).join('').toUpperCase()
+        const bg = (el) => hex(getComputedStyle(el).backgroundColor)
+        const secs = [...document.querySelectorAll('main > section')]
+        return {
+          want: want.toUpperCase(),
+          tinted: secs.filter((s) => bg(s) === want.toUpperCase()).length,
+          appendix: bg(document.querySelector('#appendix')),
+          colophon: bg(document.querySelector('.colophon')),
+          stock2: getComputedStyle(document.documentElement).getPropertyValue('--stock-2').trim().toUpperCase(),
+          stock3: getComputedStyle(document.documentElement).getPropertyValue('--stock-3').trim().toUpperCase(),
+        }
       })(),
       // the appendix is the widest thing on the page; it must scroll inside
       // its own wrapper rather than push the document sideways
@@ -130,12 +172,31 @@ for (const [w, h, label] of SIZES) {
    * masthead. Narrower than that, the layer must be anchored to the document
    * and the body must carry a bleed for the marks to sit in. */
   const TRIM = 40
+  if (Math.abs(m.mastheadEdge - m.columnEdge) > 1) {
+    bad.push(`the masthead starts at ${m.mastheadEdge}px and the body column at ${m.columnEdge}px — they share one expression and must agree`)
+  }
   if (m.trim === 'fixed' && m.textEdge < TRIM) {
     bad.push(`trim marks are fixed to the viewport but text starts at ${m.textEdge}px, inside the ${TRIM}px they occupy`)
   }
   if (m.trim === 'absolute' && m.bleed < TRIM) {
     bad.push(`trim marks are anchored to the sheet but the bleed is only ${m.bleed}px — they will sit on text`)
   }
+  /* The press marks are either in the bleed on both sides, or not shown at
+   * all. There is no third option: at the width where the text reaches the
+   * edges they stop being press marks and start being litter on a paragraph. */
+  if (m.press) {
+    if (m.press.regRight > m.press.colLeft) {
+      bad.push(`the registration mark ends at ${m.press.regRight}px, inside content that starts at ${m.press.colLeft}px`)
+    }
+    if (m.press.wedgeLeft < m.press.colRight) {
+      bad.push(`the step wedge starts at ${m.press.wedgeLeft}px, inside a text column that ends at ${m.press.colRight}px`)
+    }
+  } else if (w > 1248) {
+    bad.push('the press marks are hidden at a width that has a side bleed for them')
+  }
+  if (m.sig.tinted === 0) bad.push('no section carries the signature shade — the rule matches nothing')
+  if (m.sig.appendix !== m.sig.stock2) bad.push(`the appendix ground is ${m.sig.appendix}, not its own ${m.sig.stock2}`)
+  if (m.sig.colophon !== m.sig.stock3) bad.push(`the colophon ground is ${m.sig.colophon}, not its own ${m.sig.stock3}`)
   // the measure must be centred in the viewport wherever there is room for it
   if (m.textCentreOffset !== null && Math.abs(m.textCentreOffset) > 1) {
     bad.push(`the text column's centre is ${m.textCentreOffset}px off the viewport centre`)
@@ -149,6 +210,7 @@ for (const [w, h, label] of SIZES) {
     `centre ${m.textCentreOffset === null ? 'n/a' : m.textCentreOffset + 'px'} · ` +
     `ledger ${m.ledgerRows} rows${m.ledgerScrolls ? ' (pans)' : ''}`,
     `trim ${m.trim === 'fixed' ? `window, text at ${m.textEdge}px` : `sheet, ${m.bleed}px bleed`}`,
+    `· ${m.sig.tinted} signatures · press ${m.press ? `${m.press.regRight}|${m.press.wedgeLeft}` : 'off'}`,
   )
   for (const b of bad) console.log(`     FAIL  ${b}`)
 }
