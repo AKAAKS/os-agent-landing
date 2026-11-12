@@ -1,331 +1,495 @@
 /* =============================================================================
- *  OS AGENT — "The Signal Line".
- *  One continuous telemetry trace down the page; content rides beside it (text +
- *  a readout) on one unbroken graphite field. Electric-indigo accent; amber/red
- *  reserved for risk tiers. Perf: transform/opacity/stroke-dashoffset only, no
- *  backdrop-filter, ambient motion off under reduced motion.
+ *  OS AGENT — FIELD GUIDE.
+ *
+ *  The physical logic is a printed page: ink on warm stock, hairline rules,
+ *  no light source. So there are NO shadows, NO gradients, NO blur, NO
+ *  backdrop-filter and NO border-radius anywhere in this file. Paper does not
+ *  glow and a printed rule does not have a soft edge. If a future change wants
+ *  depth, it has to come from rule weight or from the stock changing shade —
+ *  the two things a real printed page actually has.
+ *
+ *  Colour appears in exactly two situations:
+ *    1. the four callout rules the source document defines (docs/
+ *       OS_Agent_Field_Guide.tex defines these box types and their colours);
+ *    2. a verdict the agent itself recorded — refused, or denied by Windows.
+ *  Headings get no hue. Emphasis is weight and space.
+ *
+ *  Contrast, computed (WCAG, sRGB) against each ground the colour is actually
+ *  used on — not against the lightest one, which is how a palette passes on
+ *  paper and fails inside a callout:
+ *
+ *              value      on --stock  on --stock-2  on --stock-3
+ *   --ink      #1C1A17      15.51        14.43         13.16
+ *   --ink-mid  #4C463E       8.33         7.75          7.06
+ *   --warstory #812317       8.58         7.99          7.28
+ *   --concept  #204940       8.98         8.36          7.62
+ *   --model    #3E3A63       9.43         8.77          7.99
+ *   --gotcha   #634604       7.79         7.25            —     (never on -3)
+ *
+ *  Every one clears 7:1 everywhere it appears. That bar is higher than WCAG AA
+ *  asks for and it is deliberate: the PREVIOUS version of this page ran its
+ *  body copy at 5.77:1, read as washed out, and the reflex diagnosis was "the
+ *  background is wrong". The background was fine. Do not lower these to make
+ *  a colour look more like the hue you had in mind — re-measure instead.
+ *  `npm run measure` re-checks the rendered values at six viewport sizes.
  * ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  --stock:     #F4F2EC;   /* the paper */
+  --stock-2:   #EDEAE1;   /* a callout's fill, a banded row — one shade in */
+  --stock-3:   #E4E0D4;   /* the appendix's ground */
+  --ink:       #1C1A17;   /* body and headings */
+  --ink-mid:   #4C463E;   /* captions, clause numbers, metadata */
+  --rule:      #CBC4B4;   /* a hairline */
+  --rule-hard: #9E9684;   /* a rule that divides rather than separates */
+
+  /* the four callout rules, from the source document's box types */
+  --concept:   #204940;
+  --model:     #3E3A63;
+  --gotcha:    #634604;
+  --warstory:  #812317;
+
+  /* verdicts the agent recorded. "applied" has no hue on purpose: it is the
+   * unmarked case, and giving success a colour would spend attention on the
+   * 501 records that are not the point. */
+  --refused:   var(--warstory);
+  --denied:    var(--ink-mid);
+
+  --serif: 'Source Serif 4', Georgia, serif;
+  --mono:  'IBM Plex Mono', ui-monospace, monospace;
+
+  --maxw: 68ch;          /* the measure: ~68 characters of serif */
+  --margin: 15rem;       /* the marginal column, where notes live */
+  --col: calc(var(--margin) + 2rem);  /* where the text column starts */
+  --gut: 1.25rem;
+}
 
 *, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
-body { background: #0b0d12; overflow: hidden; }
 
-.sig {
-  --bg: #0b0d12;
-  --bg2: #0e1017;
-  --ink: #dde1ea;
-  --ink-dim: #828ca3;
-  --signal: #6e7bff;
-  --signal-ice: #aab2ff;
-  --ok: #3ddc84;
-  --warn: #ffb64d;
-  --alert: #ff5d5d;
-  --line: rgba(110, 123, 255, 0.22);
-  --line-soft: rgba(110, 123, 255, 0.12);
-  --surface: rgba(18, 22, 32, 0.6);
-  --lane: clamp(180px, 23vw, 320px);
-  --f-head: 'Space Grotesk', system-ui, sans-serif;
-  --f-mono: 'JetBrains Mono', monospace;
-  --f-body: 'Inter', system-ui, sans-serif;
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
-
-  position: fixed; inset: 0;
-  height: 100vh; height: 100dvh; width: 100vw; overflow-y: scroll; overflow-x: hidden;
-  color: var(--ink); font-family: var(--f-body);
-  scrollbar-width: none;
-}
-.sig::-webkit-scrollbar { display: none; }
-
-/* one continuous field */
-.sig-field {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background:
-    radial-gradient(1200px 820px at 66% -10%, rgba(110, 123, 255, 0.08), transparent 60%),
-    radial-gradient(900px 680px at 8% 118%, rgba(110, 123, 255, 0.045), transparent 55%),
-    linear-gradient(180deg, var(--bg2), var(--bg) 60%);
-}
-.sig-field::after {
-  content: ''; position: absolute; inset: 0;
-  background-image: linear-gradient(to bottom, rgba(110, 123, 255, 0.04) 1px, transparent 1px);
-  background-size: 100% 46px;
-  mask-image: radial-gradient(ellipse 120% 100% at 28% 50%, #000 55%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 120% 100% at 28% 50%, #000 55%, transparent 100%);
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--stock);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.62;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
-/* ---- the signal lane ---- */
-.sig-lane { position: fixed; left: 0; top: 0; bottom: 0; width: var(--lane); z-index: 1; pointer-events: none; }
-.sig-lane svg { width: 100%; height: 100%; overflow: visible; display: block; }
-.sig-base { fill: none; stroke: rgba(110, 123, 255, 0.26); stroke-width: 2; vector-effect: non-scaling-stroke; }
-.sig-flow { fill: none; stroke: var(--signal); stroke-width: 2.4; vector-effect: non-scaling-stroke;
-  stroke-dasharray: 7 15; animation: sig-flow 1.1s linear infinite; filter: drop-shadow(0 0 5px rgba(110, 123, 255, 0.55)); }
-@keyframes sig-flow { to { stroke-dashoffset: -22; } }
-.sig-node { fill: var(--signal); opacity: 0.45; vector-effect: non-scaling-stroke; }
-/* active marker: HTML overlay, stays perfectly round (the SVG lane is x-stretched) */
-.sig-dot { position: absolute; top: 50%; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
-  border-radius: 50%; background: var(--signal-ice); box-shadow: 0 0 11px 2px rgba(170, 178, 255, 0.75);
-  z-index: 2; transition: left 0.6s var(--ease); }
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+a:hover { text-decoration-style: dotted; }
+code, pre, .mono { font-family: var(--mono); }
+code { font-size: 0.86em; background: var(--stock-2); padding: 0.05em 0.3em; }
 
-/* ---- bars ---- */
-.sig-top, .sig-bottom {
-  position: fixed; left: 0; right: 0; z-index: 20; display: flex; align-items: center; gap: 14px;
-  padding: 16px 30px; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--ink-dim);
-}
-.sig-top { top: 0; pointer-events: none; }
-.sig-top .brand { color: var(--signal-ice); font-family: var(--f-head); font-weight: 700; letter-spacing: 0.2em; }
-.sig-top .sub { opacity: 0.6; }
-.sig-top .top-link { margin-left: auto; color: var(--ink-dim); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; pointer-events: auto; }
-.sig-top .top-link:hover { color: var(--signal); }
-.sig-bottom { bottom: 0; pointer-events: none; }
-.sig-bottom .live { color: var(--signal); display: inline-flex; align-items: center; gap: 7px; }
-.sig-bottom .lbl { margin-left: auto; color: var(--signal-ice); }
-.sig-bottom .r { margin-left: 18px; }
+/* visually hidden — table captions for screen readers */
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* ---- sections: one continuous page, text + readout beside the line ---- */
-.sig-sec { position: relative; z-index: 2; min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; }
-.sig-content {
-  margin-left: var(--lane); width: calc(100% - var(--lane)); max-width: 1180px;
-  padding: 92px 46px 92px 30px; display: grid; grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
-  gap: 52px; align-items: center;
-  opacity: 0.22; transform: translateY(14px); transition: opacity 0.6s ease, transform 0.6s var(--ease);
-}
-.sig-content.wide { grid-template-columns: 1fr; }
-.sig-sec.on .sig-content { opacity: 1; transform: none; }
+/* ---- the sheet ----
+ * The ground was flat cream and read as unfinished. Everything added here is
+ * a real part of a printed sheet, which is the only kind of furniture this
+ * page is allowed: the stock has tooth, the marginal column is ruled, and the
+ * sheet carries trim marks. No gradient, no shadow, no glow — those would be
+ * a photograph of paper rather than paper.
+ *
+ * All three are fixed, behind the text, and pointer-events:none. They are
+ * drawn once and never animate or respond to scroll. */
 
-.sig-eyebrow { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--signal); margin-bottom: 15px; }
-.sig-h1 { font-family: var(--f-head); font-weight: 700; font-size: clamp(30px, 4vw, 52px); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 20px; color: var(--ink); }
-.sig-h2 { font-family: var(--f-head); font-weight: 700; font-size: clamp(25px, 3.1vw, 38px); line-height: 1.1; letter-spacing: -0.015em; margin: 0 0 16px; color: var(--ink); }
-.sig-h1 .g, .sig-h2 .g { color: var(--signal); }
-.sig p { font-size: 15.5px; line-height: 1.7; color: var(--ink-dim); margin: 0 0 14px; }
-.sig p em { color: var(--ink); font-style: italic; }
-.sig p .g { color: var(--signal-ice); font-style: normal; }
-.sig p b { color: var(--ink); font-weight: 600; }
-.sig p code, .sig code { font-family: var(--f-mono); font-size: 0.9em; color: var(--signal-ice); background: rgba(110, 123, 255, 0.1); padding: 1px 6px; border-radius: 3px; }
-.sig .muted-p { font-size: 13.5px; color: var(--ink-dim); opacity: 0.85; margin-top: 10px; }
-
-.sig-cta { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
-.sig-btn { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; padding: 12px 20px;
-  color: var(--bg); background: var(--signal); border: 1px solid var(--signal); cursor: pointer; text-decoration: none;
-  display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border-radius: 3px; transition: box-shadow 0.2s, background 0.2s; }
-.sig-btn:hover { box-shadow: 0 0 26px -5px rgba(110, 123, 255, 0.85); }
-.sig-btn.ghost { color: var(--signal); background: transparent; }
-.sig-btn.ghost:hover { background: rgba(110, 123, 255, 0.1); box-shadow: none; }
-.sig-sign { margin-top: 30px; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); }
-
-/* senses list */
-.sig-senses { list-style: none; margin: 24px 0 0; padding: 0; }
-.sig-senses li { display: grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items: baseline; padding: 11px 0; border-top: 1px solid var(--line-soft); }
-.sig-senses li:last-child { border-bottom: 1px solid var(--line-soft); }
-.sig-senses .k { font-family: var(--f-head); font-weight: 600; color: var(--ink); font-size: 15px; }
-.sig-senses .v { font-family: var(--f-mono); font-size: 14px; color: var(--signal-ice); text-align: right; }
-.sig-senses li.adv .v { color: var(--warn); text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
-.sig-senses .n { grid-column: 1 / -1; font-family: var(--f-mono); font-size: 11px; color: var(--ink-dim); margin-top: 3px; }
-
-/* run steps */
-.sig-run { list-style: none; margin: 22px 0 0; padding: 0; position: relative; }
-.sig-run::before { content: ''; position: absolute; left: 15px; top: 16px; bottom: 16px; width: 1px; background: var(--line); }
-.sig-run li { display: flex; gap: 15px; padding: 9px 0; }
-.sig-run .st-ico { flex: 0 0 31px; height: 31px; display: grid; place-items: center; color: var(--signal); background: var(--bg); border: 1px solid var(--line); border-radius: 50%; font-size: 14px; z-index: 1; }
-.sig-run .st-k { font-family: var(--f-head); font-weight: 600; color: var(--signal-ice); font-size: 15px; display: flex; align-items: center; gap: 10px; margin-bottom: 3px; }
-.sig-run .st-tag { font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--signal); border: 1px solid var(--line); padding: 2px 7px; border-radius: 3px; font-weight: 400; }
-.sig-run p { font-size: 13px; line-height: 1.55; color: var(--ink-dim); margin: 0; }
-
-/* kernel module grid */
-.sig-mods { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 20px 0 4px; }
-.sig-mods .mod { border: 1px solid var(--line-soft); border-left: 2px solid var(--signal); padding: 9px 12px; background: rgba(110, 123, 255, 0.04); }
-.sig-mods .m-k { display: block; font-family: var(--f-mono); font-size: 13px; color: var(--signal-ice); }
-.sig-mods .m-v { display: block; font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
-
-/* ---- right-side readouts ---- */
-.sig-aside { align-self: center; }
-.sig-card { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; overflow: hidden; }
-.card-bar { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--line-soft);
-  font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
-.card-bar .live { color: var(--signal); }
-.card-bar .muted { opacity: 0.6; }
-.card-note { padding: 10px 14px 13px; font-family: var(--f-mono); font-size: 10.5px; line-height: 1.5; color: var(--ink-dim); border-top: 1px solid var(--line-soft); }
-
-.sig-kv { margin: 0; padding: 8px 14px 12px; }
-.sig-kv > div { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line-soft); font-family: var(--f-mono); font-size: 12px; }
-.sig-kv > div:last-child { border-bottom: 0; }
-.sig-kv dt { color: var(--ink-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 10px; }
-.sig-kv dd { margin: 0; color: var(--signal-ice); }
-
-.sig-gauges { padding: 14px; display: flex; flex-direction: column; gap: 13px; }
-.gauge .g-top { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 12px; color: var(--ink); margin-bottom: 6px; }
-.gauge .g-k { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-dim); }
-.gauge .g-k svg { color: var(--signal); }
-.gauge.adv .g-k svg { color: var(--warn); }
-.gauge .g-v { color: var(--signal-ice); }
-.gauge .g-track { height: 6px; background: rgba(110, 123, 255, 0.1); border-radius: 3px; overflow: hidden; }
-.gauge .g-fill { height: 100%; background: linear-gradient(90deg, var(--signal-deep, #3b3af0), var(--signal)); transition: width 0.9s var(--ease); }
-.gauge.adv .g-fill { background: linear-gradient(90deg, #a9761f, var(--warn)); }
-
-.sig-chips { display: flex; flex-wrap: wrap; gap: 7px; padding: 14px 14px 10px; }
-.sig-chips .chip { font-family: var(--f-mono); font-size: 11px; padding: 5px 11px; border: 1px solid var(--line); color: var(--ink-dim); border-radius: 999px; }
-.sig-chips .chip.on { color: var(--bg); background: var(--signal); border-color: var(--signal); font-weight: 500; }
-.sig-pipe { padding: 2px 14px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px 9px; font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-dim); }
-.sig-pipe .k { color: var(--signal); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
-.sig-pipe b { color: var(--signal-ice); font-weight: 600; }
-.sig-pipe .arr { opacity: 0.5; }
-
-.sig-shot { margin: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #0a0c11; }
-.sig-shot img { display: block; width: 100%; height: auto; }
-.sig-shot figcaption { padding: 9px 14px; font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); border-top: 1px solid var(--line-soft); }
-
-/* faithful vector rebuild of the rich terminal dashboard */
-.sig-dashwrap { width: 100%; }
-.sig-shotcap { padding: 9px 2px 0; font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); }
-.td { font-family: var(--f-mono); background: #1a1b1f; border: 1px solid #34353b; border-radius: 6px;
-  padding: 11px 12px 9px; color: #c9c9cf; font-size: clamp(9px, 0.92vw, 10.5px); line-height: 1.4; }
-.td-head { padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid #2a2b31; color: #c9c9cf; }
-.td-head b { color: #5fb6c9; font-weight: 700; }
-.td .c-dim { color: #7c7c85; }
-.td-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 9px; align-items: start; margin-bottom: 9px; }
-.td-panel { position: relative; border: 1px solid #34353b; border-radius: 4px; padding: 13px 12px 10px; }
-.p-title { position: absolute; top: -7px; left: 50%; transform: translateX(-50%); background: #1a1b1f; padding: 0 7px; color: #7aa2e3; white-space: nowrap; }
-.m-row { display: grid; grid-template-columns: 30px 1fr 38px; align-items: center; gap: 7px; margin: 4px 0; }
-.m-k { color: #c9c9cf; }
-.m-bar { height: 11px; border-radius: 2px; overflow: hidden;
-  background-image: repeating-linear-gradient(45deg, #26272c 0, #26272c 2px, #1f2025 2px, #1f2025 4px); }
-.m-fill { display: block; height: 100%; border-radius: 2px; transition: width 0.9s var(--ease); }
-.m-pc { text-align: right; }
-.m-sub { grid-column: 1 / -1; color: #8a8a92; font-size: 0.92em; margin: -2px 0 2px 37px; }
-.m-gap { height: 7px; }
-.c-bg-red { background: #d16a6a; } .c-bg-warn { background: #c9b24a; } .c-bg-green { background: #8bc34a; }
-.td .c-red { color: #d16a6a; } .td .c-warn { color: #c9b24a; } .td .c-green { color: #8bc34a; }
-.td .c-amber { color: #e0943a; } .td .c-blue { color: #7aa2e3; }
-.s-row { display: grid; grid-template-columns: 58px 1fr; gap: 6px; margin: 3px 0; }
-.s-k { color: #9a9aa2; }
-.s-sub { color: #7c7c85; margin: -1px 0 3px 64px; }
-.s-spacer { height: 7px; }
-.t-row { display: grid; grid-template-columns: 1fr 46px 42px 50px; gap: 5px; }
-.t-row > span:nth-child(n+2) { text-align: right; }
-.t-head { color: #9a9aa2; margin-bottom: 4px; }
-.bt-row { margin: 5px 0; }
-.d-row { display: grid; grid-template-columns: 58px 1.5fr 1.4fr 32px 46px; gap: 6px; margin: 2px 0; }
-.d-head { color: #9a9aa2; margin-bottom: 4px; }
-.td-foot { text-align: center; color: #6a6a72; margin-top: 10px; font-size: 0.95em; }
-
-/* control-loop diagram (inline SVG, crisp at any size) */
-.sig-content.sig-arch-sec { align-self: flex-start; padding-top: 52px; padding-bottom: 32px; }
-.sig-arch-head { max-width: 880px; margin: 0 auto; text-align: center; }
-.sig-arch-head p { max-width: 740px; margin-left: auto; margin-right: auto; }
-.sig-arch { margin: 14px auto 0; max-width: 920px; width: 100%; }
-.archsvg { width: 100%; height: auto; display: block; }
-.sig-arch figcaption { margin-top: 13px; text-align: center; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.06em; color: var(--ink-dim); }
-.archsvg text { font-family: var(--f-body); }
-.a-title { font-family: var(--f-head); font-weight: 700; font-size: 17px; fill: var(--signal); }
-.a-sub { font-size: 12px; fill: var(--ink-dim); }
-.a-mid { font-size: 12px; fill: var(--ink-dim); }
-.a-node { fill: rgba(18, 22, 32, 0.6); stroke: rgba(110, 123, 255, 0.32); stroke-width: 1.2; }
-.a-nt { font-family: var(--f-head); font-weight: 600; font-size: 14px; fill: var(--ink); }
-.a-ns { font-size: 11.5px; fill: var(--ink-dim); }
-.a-hex { fill: rgba(255, 182, 77, 0.08); stroke: var(--warn); stroke-width: 1.3; }
-.a-amber { fill: var(--warn); }
-.a-arrow { stroke: rgba(110, 123, 255, 0.55); stroke-width: 1.4; fill: none; }
-.a-ah { fill: rgba(110, 123, 255, 0.7); }
-.a-loop { stroke: var(--ink-dim); stroke-width: 1.3; stroke-dasharray: 5 5; fill: none; opacity: 0.75; }
-.a-ahd { fill: var(--ink-dim); }
-.a-kernel-box { fill: rgba(110, 123, 255, 0.04); stroke: rgba(110, 123, 255, 0.28); stroke-width: 1.2; }
-.a-kernel { font-family: var(--f-head); font-weight: 700; font-size: 14px; fill: var(--signal); }
-.a-kbox { fill: rgba(18, 22, 32, 0.5); stroke: rgba(110, 123, 255, 0.26); stroke-width: 1.1; }
-.a-kbox-hi { fill: rgba(61, 220, 132, 0.09); stroke: rgba(61, 220, 132, 0.55); stroke-width: 1.3; }
-.a-kt { font-family: var(--f-head); font-weight: 600; font-size: 13px; fill: var(--ink); }
-.a-ks { font-size: 11px; fill: var(--ink-dim); }
-.a-green { fill: var(--ok); }
-
-/* gate */
-.sig-card.gate .card-bar .risk { padding: 2px 8px; border-radius: 3px; font-size: 9px; }
-.risk.med { color: var(--warn); border: 1px solid rgba(255, 182, 77, 0.4); }
-.gate-json { margin: 0; padding: 13px 14px; font-family: var(--f-mono); font-size: 11.5px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; border-bottom: 1px solid var(--line-soft); }
-.gate-actions { display: flex; gap: 10px; padding: 13px 14px; }
-.g-btn { flex: 1; font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; padding: 10px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid; transition: background 0.2s; }
-.g-btn.ok { color: var(--ok); border-color: rgba(61, 220, 132, 0.5); background: rgba(61, 220, 132, 0.08); }
-.g-btn.ok:hover { background: rgba(61, 220, 132, 0.18); }
-.g-btn.no { color: var(--ink-dim); border-color: var(--line); background: transparent; }
-.g-btn.no:hover { background: rgba(110, 123, 255, 0.08); }
-.gate-out { padding: 13px 14px; font-size: 12px; line-height: 1.5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.gate-out svg { flex: 0 0 auto; }
-.gate-out.approve { color: var(--ok); }
-.gate-out.deny { color: var(--warn); }
-.gate-out .relink { margin-left: auto; font-family: var(--f-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-dim); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-.gate-ladder { display: flex; flex-direction: column; gap: 5px; padding: 11px 14px 14px; border-top: 1px solid var(--line-soft); }
-.gate-ladder .rl { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: 0.06em; display: inline-flex; align-items: center; gap: 8px; color: var(--ink-dim); }
-.gate-ladder .rl.ok { color: var(--ok); }
-.gate-ladder .rl.med { color: var(--warn); }
-.gate-ladder .rl.high { color: var(--alert); }
-
-/* honest state (wide) */
-.sig-state-head { max-width: 760px; margin: 0 auto 10px; text-align: center; }
-.sig-state { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; max-width: 860px; margin: 18px auto 0; }
-.st-col { border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; background: var(--surface); }
-.st-col .col-h { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.st-col.solid .col-h { color: var(--ok); }
-.st-col.growing .col-h { color: var(--signal); }
-.st-col ul { list-style: none; margin: 0; padding: 0; }
-.st-col li { font-size: 14px; line-height: 1.5; color: var(--ink-dim); padding: 9px 0 9px 18px; position: relative; border-top: 1px solid var(--line-soft); }
-.st-col li:first-child { border-top: 0; }
-.st-col li::before { content: ''; position: absolute; left: 0; top: 16px; width: 6px; height: 6px; border-radius: 50%; }
-.st-col.solid li::before { background: var(--ok); }
-.st-col.growing li::before { background: var(--signal); }
-
-.sig-hint { position: fixed; left: 50%; bottom: 50px; transform: translateX(-50%); z-index: 20;
-  font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-dim); opacity: 0.55; }
-
-@media (prefers-reduced-motion: reduce) {
-  .sig-flow { animation: none; stroke-dasharray: none; }
-  .sig-lane g, .sig-dot { transition: none !important; }
-  .sig-content { opacity: 1 !important; transform: none !important; transition: none; }
-  .gauge .g-fill { transition: none; }
+/* The tooth of the stock: feTurbulence tiled at 160px, at 5%. Above about 7%
+ * it stops reading as paper and starts reading as a JPEG artefact.
+ *
+ * NOT mix-blend-mode: multiply, which is what this was first. A blended
+ * full-viewport fixed layer forces the whole page into its own compositing
+ * pass and made Chrome's Page.captureScreenshot time out at 30s while the
+ * page stayed responsive to JavaScript — the same symptom the sticky appendix
+ * header produced. Plain opacity over a flat cream ground is visually
+ * indistinguishable here and costs nothing. */
+.sheet-tooth {
+  position: fixed; inset: 0; z-index: -2; pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
 }
 
-/* ---- responsive ----
- * On phones/tablets the snap scroller is dropped: the page becomes a normal
- * vertically-scrolling document (many beats are taller than a phone viewport,
- * and centering + a scroll trap clipped them). Beats are natural height and
- * top-aligned, content is full width, and the signal line becomes a thin
- * static left rail. The dynamic SVG lane and its node are hidden. */
-.archsvg-scroll { width: 100%; }
+/* trim marks, one per corner of the sheet, inset by the gutter. Four
+ * background images rather than four elements; each is the same L drawn in
+ * --rule-hard, turned for its corner. */
+.sheet-trim {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: 28px 28px;
+  /* All four written in the full four-value form. `12px bottom 12px` is a
+   * THREE-value position, which is invalid, and one invalid entry drops the
+   * whole declaration — every mark then stacked at 0% 0% in the top-left
+   * corner, which looked like a rendering bug rather than a CSS error. */
+  background-position:
+    left 12px top 12px, right 12px top 12px,
+    left 12px bottom 12px, right 12px bottom 12px;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M0 18H10M18 0V10' stroke='%239E9684' fill='none'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M28 18H18M10 0V10' stroke='%239E9684' fill='none'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M0 10H10M18 28V18' stroke='%239E9684' fill='none'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath d='M28 10H18M10 28V18' stroke='%239E9684' fill='none'/%3E%3C/svg%3E");
+}
 
-@media (max-width: 920px) {
-  .sig { --lane: 20px; touch-action: auto; }
+/* ---- the page grid ----
+ * Content sits on the measure; the marginal column holds notes. Full-bleed
+ * bands are done with padding on the section itself (never width:100vw, which
+ * includes the scrollbar), so no wrapper element is needed and nothing lives
+ * behind the content. */
+main > section {
+  /* The TEXT COLUMN is centred in the viewport — not the text-plus-margin
+   * block. There are four marginal notes in the whole document, so that column
+   * is empty nearly everywhere, and centring the block put the measure visibly
+   * right of centre on every screen with nothing in the margin to balance it.
+   *
+   * padding-left takes whichever is larger: enough room for the marginal
+   * column to exist, or the amount that centres the measure. Because it is
+   * never less than --col, a note pulling back by --col cannot leave the
+   * viewport — which is the bug this replaced. */
+  padding-left: max(calc(var(--gut) + var(--col)), calc((100% - var(--maxw)) / 2));
+  padding-right: max(var(--gut), calc((100% - var(--maxw)) / 2));
+  padding-block: 3.5rem;
+}
+main > section > * { max-width: var(--maxw); }
 
-  /* native scroll: natural-height, top-aligned, always-visible beats */
-  .sig-sec { min-height: auto; align-items: flex-start; }
-  .sig-content {
-    grid-template-columns: 1fr; gap: 26px;
-    margin-left: 0; width: 100%; max-width: 100%; min-width: 0;
-    padding: 30px 18px 36px 30px;
-    opacity: 1; transform: none; transition: none;
+/* The margin rule: the vertical hairline dividing the marginal column from the
+ * measure, sitting in the middle of the 2rem gap so it never crosses text.
+ * Ruled paper has one, and it is what makes the marginal column read as
+ * intentional rather than as the page being shoved right.
+ *
+ * Drawn PER SECTION, not as one fixed line behind everything. A fixed line at
+ * z-index -1 is painted over by any section that has its own background —
+ * the rule simply stopped at the appendix and the colophon. */
+main > section {
+  /* Drawn as the section's own BACKGROUND IMAGE, not as a positioned
+   * pseudo-element and not as one fixed line for the page.
+   *   · a fixed line at z-index -1 is painted over by any section that has a
+   *     background — the rule just stopped at the appendix;
+   *   · an absolutely positioned ::before paints OVER in-flow content and drew
+   *     a hairline straight through Figure 1. Masking the figure with an
+   *     opaque patch fixed that and left a visible rectangle of flat stock.
+   * As a background layer it sits under everything in the section and above
+   * nothing, so content occludes it for free and a banded section still draws
+   * its own. */
+  background-image: linear-gradient(to right, var(--rule) 0 1px, transparent 1px);
+  background-repeat: repeat-y;
+  background-size: 1px 100%;
+  background-position-x: calc(max(calc(var(--gut) + var(--col)), calc((100% - var(--maxw)) / 2)) - 1rem);
+  background-position-y: 0;
+}
+
+/* The text column is offset by the marginal column; notes pull back into it.
+ * Applied to every direct child in one rule, and every later rule in this file
+ * therefore sets margin-top/margin-bottom and NEVER the `margin` shorthand —
+ * a shorthand resets margin-left to 0 and silently un-indents the column.
+ * That bug shipped once already; it is why the rules below look verbose. */
+.clause > *, .colophon > *, .title > * { max-width: var(--maxw); }
+
+/* Things that hang into the marginal column: the clause number, the marginal
+ * notes, and anything too wide for the measure (a figure, the appendix). They
+ * pull back by exactly --col, which the section's padding guarantees exists. */
+.clause > h2, .colophon > h2 {
+  max-width: calc(var(--maxw) + var(--col));
+  margin-left: calc(-1 * var(--col));
+}
+
+/* ---- masthead ---- */
+.masthead {
+  display: flex; justify-content: space-between; gap: 1rem;
+  border-bottom: 1px solid var(--rule-hard);
+  padding-block: 0.6rem;
+  padding-left: max(calc(var(--gut) + var(--col)), calc((100% - var(--maxw)) / 2));
+  padding-right: max(var(--gut), calc((100% - var(--maxw)) / 2));
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-mid);
+}
+.masthead p { margin-block: 0; }
+
+/* ---- title page ----
+ * Deliberately shorter than a viewport: a reader who clicked a link already
+ * knows the name, and the eye should be pulled down into §1 rather than parked
+ * on a splash. */
+.title { border-bottom: 1px solid var(--rule-hard); }
+.title h1 {
+  font-size: clamp(2.6rem, 7vw, 4.4rem); font-weight: 700; letter-spacing: -0.02em;
+  line-height: 1; margin-block: 0 1.2rem; max-width: none;
+}
+/* the title page's own marginal block carries the issue data, the way a
+ * manual's does — it is the only thing in the margin at this height */
+.title .note { margin-top: 0.7rem; }
+.standfirst { font-size: 1.22rem; line-height: 1.5; margin-block: 0 2rem; }
+.attached { font-size: 0.95rem; color: var(--ink-mid); border-top: 1px solid var(--rule); padding-top: 1rem; }
+
+.may { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem 2.5rem; margin-bottom: 2rem; }
+.may h3 {
+  font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-mid); margin-block: 0 0.6rem;
+  padding-bottom: 0.4rem; border-bottom: 1px solid var(--rule-hard);
+}
+.may ul { margin-block: 0; padding: 0; list-style: none; font-size: 0.95rem; line-height: 1.45; }
+.may li { padding: 0.45rem 0; border-bottom: 1px solid var(--rule); }
+.may code { font-size: 0.8em; background: none; padding: 0 0.15em; }
+
+.links { display: flex; flex-wrap: wrap; gap: 0 1.5rem; font-family: var(--mono); font-size: 12px; }
+
+/* ---- clauses ---- */
+.clause { border-bottom: 1px solid var(--rule-hard); }
+.clause h2, .colophon h2 {
+  font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2;
+  margin-block: 0 1.4rem; display: flex; gap: 2rem; align-items: baseline;
+}
+.clause h2 a, .colophon h2 { text-decoration: none; }
+.clause-n {
+  flex: 0 0 auto; width: var(--margin); text-align: right;
+  font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-mid);
+}
+.clause p, .colophon p { margin-block: 0 1.1rem; }
+h3.sub {
+  font-size: 1.1rem; font-weight: 700; margin-block: 2.2rem 0.8rem;
+  padding-top: 1rem; border-top: 1px solid var(--rule);
+}
+
+/* ---- marginalia ----
+ * In the left margin on a wide page. It is a note: it never holds content the
+ * body needs, so folding it inline on a narrow page loses nothing. */
+.note {
+  display: block; float: left; clear: left;
+  /* margin-left:0, NOT a negative margin pulling back from the text column.
+   * A float is positioned from the containing block's content edge, so a
+   * -272px pull put the note off-screen at every width where the section's
+   * own padding was under 272px — i.e. the whole 992-1440px band, which is
+   * most laptops. The marginal column already starts at the content edge. */
+  width: var(--margin); margin-left: calc(-1 * var(--col)); margin-bottom: 1.1rem;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--ink-mid);
+  border-top: 1px solid var(--rule-hard); padding-top: 0.5rem;
+}
+.note code { background: none; padding: 0; font-size: 1em; }
+
+/* ---- callouts ----
+ * Four types, matching the box types in docs/OS_Agent_Field_Guide.tex. A fifth
+ * would be a fifth colour, and a colour needs a role. The rule is 3px on the
+ * leading edge; the kind is NAMED in the heading, in its own colour, so the
+ * colour is legended by the thing it colours and never has to be guessed. */
+.box {
+  background: var(--stock-2);
+  border-left: 3px solid var(--rule-hard);
+  padding: 1rem 1.2rem 0.2rem;
+  margin-block: 1.6rem;
+}
+.box p { font-size: 0.97rem; line-height: 1.55; }
+.box-h { font-weight: 700; margin-bottom: 0.5rem !important; }
+.box-kind {
+  display: block; font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.15rem;
+}
+.box-concept { border-left-color: var(--concept); } .box-concept .box-kind { color: var(--concept); }
+.box-model   { border-left-color: var(--model);   } .box-model   .box-kind { color: var(--model);   }
+.box-gotcha  { border-left-color: var(--gotcha);  } .box-gotcha  .box-kind { color: var(--gotcha);  }
+.box-war     { border-left-color: var(--warstory);} .box-war     .box-kind { color: var(--warstory);}
+
+/* ---- quoted machine output ----
+ * Mono, on a sunken stock, with the file and line it came from underneath.
+ * Everything inside a .quote was written by the agent; nothing in here may be
+ * edited except a redaction, which shows. */
+/* margin-inline: 0 because <figure> carries a 40px inline margin by default,
+ * which indented every quoted line away from the column it belongs to. */
+.quote { margin-block: 1.4rem; margin-inline: 0; }
+.quote pre {
+  margin-block: 0; margin-left: 0; padding: 0.85rem 1rem; background: var(--stock-3);
+  border-left: 3px solid var(--rule-hard);
+  font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+}
+.quote figcaption {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-mid);
+  margin-top: 0.4rem; letter-spacing: 0.02em;
+}
+
+/* ---- spec tables ---- */
+.spec { border-collapse: collapse; width: 100%; margin-block: 1.2rem 1.5rem; }
+.spec th, .spec td { text-align: left; padding: 0.5rem 0.6rem 0.5rem 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+.spec th { font-weight: 600; width: 10rem; }
+.spec td { font-family: var(--mono); font-size: 13px; }
+.spec td:last-child { color: var(--ink-mid); }
+.spec tr:first-child th, .spec tr:first-child td { border-top: 1px solid var(--rule-hard); }
+
+
+.procs th { font-family: var(--mono); font-size: 12.5px; font-weight: 400; width: 16rem; }
+.procs .p-bar { width: auto; padding-right: 0.8rem; }
+.procs .p-bar span { display: block; height: 9px; background: var(--rule-hard); }
+.procs .p-n { width: 3.5rem; text-align: right; color: var(--ink-mid); }
+
+/* ---- the four figures ---- */
+.figures {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px;
+  background: var(--rule); border: 1px solid var(--rule); margin-block: 1.5rem 1.4rem;
+}
+.figures > div { background: var(--stock); padding: 1rem 1.1rem; }
+.figures b { display: block; font-size: 2.3rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+.figures span { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mid); margin-top: 0.4rem; }
+.fig-hero b { color: var(--warstory); }
+
+/* ---- figure 1 ---- */
+/* A figure is wider than the measure on purpose: it uses the marginal column
+ * too, because a diagram squeezed to 68ch is a diagram nobody can read. */
+/* clear:left because a marginal note is a left float occupying the same
+ * column this hangs into — without it the note and the figure overlap.
+ * margin-right:0 undoes <figure>'s default 40px inline margin.
+ */
+/* A framed plate on its own patch of stock. The margin rule is a background
+ * layer of the section, so it would otherwise show THROUGH the diagram's
+ * transparent areas — a hairline crossing the loop and the kernel box. An
+ * opaque figure stops it, and the border is what makes the stop read as a
+ * plate pasted onto a ruled sheet rather than as a missing length of rule. */
+.fig { margin-block: 1.8rem; margin-left: calc(-1 * var(--col)); margin-right: 0;
+  clear: left; max-width: calc(var(--maxw) + var(--col));
+  background: var(--stock); border: 1px solid var(--rule); padding: 1rem 1.1rem 0.9rem; }
+.fig figcaption { padding-top: 0.2rem; }
+.fig svg { width: 100%; height: auto; display: block; }
+.fig figcaption { font-size: 0.9rem; color: var(--ink-mid); margin-top: 0.7rem; max-width: var(--maxw); margin-left: var(--col); }
+.fig svg { margin-left: 0; }
+.f-node   { fill: var(--stock); stroke: var(--ink); stroke-width: 1; }
+.f-gate   { fill: var(--stock-3); stroke: var(--warstory); stroke-width: 1.6; }
+.f-kbox   { fill: none; stroke: var(--rule-hard); stroke-width: 1; }
+.f-knode  { fill: var(--stock-2); stroke: var(--rule-hard); stroke-width: 1; }
+.f-arrow, .f-return { stroke: var(--ink); stroke-width: 1; fill: none; }
+.f-return { stroke-dasharray: 4 3; }
+.f-ah     { fill: var(--ink); }
+.f-nt     { font-family: var(--serif); font-size: 15px; font-weight: 600; fill: var(--ink); }
+.f-knt    { font-family: var(--serif); font-size: 13.5px; font-weight: 600; fill: var(--ink); }
+.f-kt     { font-family: var(--mono); font-size: 13px; font-weight: 600; fill: var(--ink); letter-spacing: 0.04em; }
+.f-cap    { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-mid); }
+
+/* ---- limits ---- */
+.limits { list-style: none; margin-block: 0 1rem; padding: 0; }
+.limits li { padding: 0.8rem 0; border-top: 1px solid var(--rule); font-size: 0.97rem; line-height: 1.55; }
+.limits li:last-child { border-bottom: 1px solid var(--rule); }
+
+/* ---- the legend ----
+ * Sits ABOVE the thing it explains, both times it is used. A reader meets the
+ * three verdict colours before, not after, the table that uses them. */
+/* ---- the legend, which is also the filter ----
+ * The swatch was already a printed tickbox: a square rule you fill in. Making
+ * it a control adds the behaviour the form implied rather than a widget a
+ * manual has no place for. Ticked = ink in the box, which is also the one
+ * state change on this page that is not a hover. */
+.legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.2rem;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+  margin-block: 1.2rem 0.2rem;
+}
+.sw {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font: inherit; letter-spacing: inherit; color: var(--ink-mid);
+  background: none; border: 0; padding: 0.3rem 0; cursor: pointer;
+}
+.sw::before {
+  content: ''; flex: 0 0 auto; width: 11px; height: 11px;
+  border: 1px solid currentColor; background: transparent;
+}
+.sw.on { color: var(--ink); }
+.sw.on.v-refused { color: var(--refused); }
+.sw.on.v-denied  { color: var(--denied); }
+/* the filled box uses an inset box-shadow rather than a background so the
+ * 1px rule stays visible around the ink — a ticked box, not a solid block */
+.sw.on::before { box-shadow: inset 0 0 0 2px var(--stock), inset 0 0 0 11px currentColor; }
+.sw:hover::before { border-color: var(--ink); }
+.sw:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
+.sw-n { color: var(--ink-mid); font-size: 10px; }
+.sw.on .sw-n { color: inherit; opacity: 0.75; }
+/* no margin-left:auto — the legend wraps on a narrow measure, and an auto
+ * margin on a wrapped flex line shoves the count into the middle of nowhere */
+.legend-count { color: var(--ink-mid); padding-left: 0.4rem; }
+#appendix .sw.on::before { box-shadow: inset 0 0 0 2px var(--stock-2), inset 0 0 0 11px currentColor; }
+
+/* ---- appendix A ----
+ * All 564 rows, in file order, always present in the DOM. Nothing here reveals
+ * on scroll and nothing is paginated: a reader who flicks to the bottom has the
+ * complete ledger, and ctrl-F finds any line in it. */
+#appendix { background-color: var(--stock-2); }
+#appendix .legend, #appendix > p { max-width: var(--maxw); }
+/* The appendix table uses the marginal column too — 564 rows of timestamp,
+ * action and message do not fit on a 68ch measure without wrapping every
+ * outcome onto two lines. */
+/* opaque for the same reason as .fig; its ground is the band's, so the stop
+ * is invisible and the rule simply ends where the table begins */
+.ledger-wrap { margin-top: 1.4rem; margin-left: calc(-1 * var(--col)); clear: left;
+  max-width: calc(var(--maxw) + var(--col)); background: var(--stock-2);
+  overflow-x: auto; border-top: 1px solid var(--rule-hard); }
+.ledger { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 11.5px; }
+.ledger th {
+  /* NOT position:sticky. A printed appendix has no floating header, and a
+   * sticky th across 564 rows also wedged headless screenshot capture hard
+   * enough to time out Chrome's Page.captureScreenshot. Both reasons point
+   * the same way; the correctness one is the compositing cost. */
+  text-align: left; font-weight: 600; padding: 0.5rem 0.9rem 0.5rem 0;
+  border-bottom: 1px solid var(--rule-hard);
+  font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.ledger td { padding: 0.28rem 0.9rem 0.28rem 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; white-space: nowrap; }
+.ledger .l-ts   { color: var(--ink-mid); }
+.ledger .l-act  { color: var(--ink-mid); }
+.ledger .l-risk { color: var(--ink-mid); }
+.ledger .l-msg  { white-space: normal; }
+.ledger .l-n, .ledger .l-n-h { text-align: right; padding-right: 0; color: var(--ink-mid); }
+.ledger .l-n { font-variant-numeric: tabular-nums; }
+.ledger tr.v-refused .l-msg { color: var(--refused); }
+.ledger tr.v-denied  .l-msg { color: var(--denied); }
+
+/* ---- colophon ---- */
+.colophon { background-color: var(--stock-3); }
+.colophon h2 { font-size: 1.2rem; margin-bottom: 1rem; }
+.colophon p { font-size: 0.95rem; color: var(--ink-mid); }
+.colophon .sign { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+
+/* ---- narrow ----
+ * One column. The marginal notes fold inline, the figure gets a horizontal
+ * scroller of its own, and the appendix keeps every row. Nothing is hidden at
+ * any width: the page has no content that only a wide viewport can reach. */
+/* 76rem = 1216px, DERIVED, not picked. The measure renders at 624px (68ch of
+ * 18px Source Serif), the marginal column plus its gap is --col = 272px, and
+ * the page gutter is 20px. The measure can only be centred AND have a marginal
+ * column beside it when 100% >= 624 + 2 x (272 + 20) = 1208px. Below that the
+ * padding needed for the margin wins and the text sits visibly right of
+ * centre — 46px off at 1024px, which is what this breakpoint exists to stop.
+ * Lowering it brings that back; if --maxw or --margin changes, recompute it. */
+@media (max-width: 75.5rem) {
+  /* no marginal column at this width, so nothing hangs and nothing pulls —
+   * and no rule, because there is nothing for it to divide */
+  :root { --margin: 0rem; --col: 0rem; }
+  main > section { background-image: none; }
+  body { font-size: 17px; }
+  .clause h2, .colophon h2 { display: block; }
+  .clause-n { display: block; width: auto; text-align: left; margin-bottom: 0.3rem; }
+  .note {
+    float: none; width: auto; margin-left: 0; margin-bottom: 1.2rem;
+    border-top: 1px solid var(--rule-hard); border-left: 3px solid var(--rule);
+    padding: 0.5rem 0 0.5rem 0.8rem;
   }
-  .sig-sec:first-child .sig-content { padding-top: 74px; }
-  .sig-sec:last-child  .sig-content { padding-bottom: 94px; }
-  .sig-main, .sig-aside, .sig-arch, .sig-arch-head,
-  .sig-state, .sig-state-head { min-width: 0; max-width: 100%; }
+  .may { grid-template-columns: 1fr; gap: 1.5rem; }
+  .figures { grid-template-columns: 1fr 1fr; }
+  .fig { overflow-x: auto; }
+  .fig svg { min-width: 700px; }   /* legible rather than squeezed — swipe to pan */
+  .spec th { width: 8rem; }
+  .procs th { width: 11rem; font-size: 11.5px; }
+  /* The appendix keeps one record per row on a phone and pans sideways
+   * instead of wrapping each one onto four lines: wrapping turned the
+   * appendix into 56,000px of scrolling and made two adjacent records hard
+   * to tell apart. The wrapper scrolls, the document does not. */
+  .ledger .l-msg { white-space: nowrap; }
+}
 
-  /* the signal line → a thin static left rail */
-  .sig-lane {
-    width: 2px; left: 9px;
-    background: linear-gradient(180deg, transparent, var(--line) 5%, var(--line) 95%, transparent);
-  }
-  .sig-lane svg, .sig-dot { display: none; }
+@media (max-width: 30rem) {
+  .figures { grid-template-columns: 1fr; }
+  .figures b { font-size: 2rem; }
+}
 
-  /* wide readouts & diagrams fit the narrow column */
-  .sig-content.wide .sig-state { grid-template-columns: 1fr; }
-  .sig-content.sig-arch-sec { padding-top: 62px; }
-  .sig-arch { align-self: stretch; }
-  .archsvg-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .archsvg { min-width: 720px; }           /* stays legible — swipe to pan */
-  .td-grid { grid-template-columns: 1fr; } /* stack the dashboard panels */
-  .td { overflow-x: auto; }
-  .sig-mods { grid-template-columns: 1fr; }
+/* A printed page does not animate. There is no motion on this page to reduce,
+ * which is why there is no prefers-reduced-motion block: nothing would change. */
 
-  /* bars become solid + tappable */
-  .sig-top, .sig-bottom { padding: 11px 14px; background: rgba(11, 13, 18, 0.94); }
-  .sig-top { pointer-events: auto; }
-  .sig-top .sub { display: none; }
-  .sig-bottom .r { margin-left: 12px; }
-  .sig-hint { display: none; }
+@media print {
+  .masthead { position: static; }
+  a { text-decoration: none; }
+  .ledger { font-size: 8px; }
 }

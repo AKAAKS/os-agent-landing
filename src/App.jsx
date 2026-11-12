@@ -1,639 +1,677 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useReducedMotion } from 'framer-motion'
-import {
-  FiArrowRight, FiGithub, FiBookOpen, FiEye, FiCompass, FiCpu, FiShield, FiZap,
-  FiCheckCircle, FiAlertTriangle, FiXCircle, FiLock, FiActivity, FiHardDrive,
-} from 'react-icons/fi'
-
-/* ============================================================================
- * OS AGENT — "The Signal Line".
- * One continuous telemetry trace runs the full height of the page and threads
- * every section together. Scroll = time across a live monitor; the narrative is
- * in the SHAPE of the line — calm baseline -> the RAM spike (the problem) ->
- * resolve and settle onto a solid floor (the solution: the trust engineering).
- * Controlled snap scroller + graphite/indigo. No panels, no HUD furniture.
+/* =============================================================================
+ *  OS AGENT — FIELD GUIDE.
+ *
+ *  The page is a printed technical manual for a machine that has been given
+ *  authority over a computer, with that machine's own audit ledger bound in as
+ *  an appendix. The register is not decorative: the source repo contains
+ *  docs/OS_Agent_Field_Guide.tex, a 795-line LaTeX manual with exactly these
+ *  callout types (CONCEPT, MENTAL MODEL, GOTCHA, WAR STORY). This page renders
+ *  that document's vocabulary, not a theme chosen to look technical.
+ *
+ *  Rules this file is required to keep — see README "Anti-goals":
+ *    · No number is typed. Every figure comes from src/data/derive.js.
+ *    · No log line is paraphrased. Quoted text is mono; authored text is serif.
+ *      The typeface IS the boundary between the two.
+ *    · Scroll turns pages and does nothing else. No hijack, no snap, no
+ *      reveal-on-scroll, no sticky stage.
+ *    · Colour appears only as one of the four callout rules the source document
+ *      defines, or as a verdict the agent itself recorded.
  * ========================================================================== */
-
-const WHEEL_THRESHOLD = 170
-const COOLDOWN = 820
-const GESTURE_GAP = 260
-const TOUCH_THRESHOLD = 55
-
-/* ---- signal geometry ---- */
-const SEG = 1000
-const LW = 340
-const CX = 118
-const SPIKE_INDEX = 3            // the "detect" beat — the RAM spike
-const clamp01 = (v) => Math.max(0, Math.min(1, v))
-
-function xAt(y, total) {
-  // amplitude settles toward the end (the line calms after it's resolved)
-  const settleStart = (SPIKE_INDEX + 1) * SEG
-  const settleEnd = (total - 0.5) * SEG
-  const settle = 1 - 0.62 * clamp01((y - settleStart) / (settleEnd - settleStart))
-  const base = CX + (Math.sin(y * 0.009) * 13 + Math.sin(y * 0.031) * 6) * settle
-  const sy = (SPIKE_INDEX + 0.5) * SEG
-  const d = y - sy
-  const spike = Math.exp(-(d * d) / (2 * 32 * 32)) * 184            // the jut
-  const ripple = d > 0 ? Math.sin(d * 0.05) * 40 * Math.exp(-d / 240) : 0 // settling
-  return base + spike + ripple
-}
+import { useState } from 'react'
+import {
+  span, totals, killLedger, priorityLedger, ledgerRows, processes, cost,
+  quotes, settings, redactions, redactionsShown, generated, tests,
+} from './data/derive.js'
 
 const LINKS = {
   github: 'https://github.com/AKAAKS/OS_agent',
-  docs: 'https://github.com/AKAAKS/OS_agent#readme',
+  guide: 'https://github.com/AKAAKS/OS_agent/blob/main/docs/OS_Agent_Field_Guide.tex',
+  ledger: 'https://github.com/AKAAKS/OS_agent/blob/main/data/actions.jsonl',
 }
 
-/* ---- CountUp ---- */
-function CountUp({ value, suffix = '', decimals = 0, duration = 1.3, run }) {
-  const reduce = useReducedMotion()
-  const [display, setDisplay] = useState(reduce ? value : 0)
-  useEffect(() => {
-    if (reduce) { setDisplay(value); return }
-    if (!run) return
-    let raf
-    const start = performance.now()
-    const tick = (now) => {
-      const t = Math.min(1, (now - start) / (duration * 1000))
-      setDisplay(value * (1 - Math.pow(1 - t, 3)))
-      if (t < 1) raf = requestAnimationFrame(tick); else setDisplay(value)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [run, reduce, value, duration])
-  return <span>{display.toFixed(decimals)}{suffix}</span>
-}
+const int = (n) => n.toLocaleString('en-GB')
+const usd = (n) => `$${n.toFixed(2)}`
+const longDate = (iso) =>
+  new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
-/* ---- the continuous signal line ---- */
-function SignalLine({ active, total }) {
-  const H = total * SEG
-  const path = useMemo(() => {
-    let d = ''
-    for (let y = 0; y <= H; y += 18) d += `${y === 0 ? 'M' : 'L'}${xAt(y, total).toFixed(1)} ${y} `
-    return d.trim()
-  }, [H, total])
-  const nodeY = (active + 0.5) * SEG
-  const shift = SEG / 2 - nodeY
-  const xfrac = xAt(nodeY, total) / LW // 0..1 across the lane width
+/* ---- the manual's furniture --------------------------------------------- */
+
+/* A callout. `kind` must be one of the four the source document defines; a
+ * fifth would be a new colour, and a new colour needs a reason. */
+function Box({ kind, title, children }) {
+  const label = { concept: 'Concept', model: 'Mental model', gotcha: 'Gotcha', war: 'War story' }[kind]
   return (
-    <div className="sig-lane" aria-hidden="true">
-      <svg viewBox={`0 0 ${LW} ${SEG}`} preserveAspectRatio="none">
-        <g style={{ transform: `translateY(${shift}px)`, transition: 'transform 0.6s cubic-bezier(0.22,1,0.36,1)' }}>
-          <path className="sig-base" d={path} />
-          <path className="sig-flow" d={path} />
-          {Array.from({ length: total }).map((_, i) => {
-            const ny = (i + 0.5) * SEG
-            return <circle key={i} className="sig-node" cx={xAt(ny, total)} cy={ny} r={3} />
-          })}
-        </g>
-      </svg>
-      {/* active marker — HTML overlay so it stays perfectly round (the SVG is stretched) */}
-      <div className="sig-dot" style={{ left: `calc(var(--lane) * ${xfrac.toFixed(4)})` }} />
-    </div>
+    <aside className={`box box-${kind}`}>
+      <p className="box-h"><span className="box-kind">{label}</span>{title}</p>
+      {children}
+    </aside>
   )
 }
 
-/* ---- data ---- */
-const SENSES = [
-  { k: 'CPU spike', v: '> 95%', n: 'sustained 120s' },
-  { k: 'RAM high', v: '> 85%', n: 'of total' },
-  { k: 'Disk pressure', v: '> 90%', n: 'usage' },
-  { k: 'Memory leak', v: '> 500MB', n: 'growth / 30 min' },
-  { k: 'GPU / thermal', v: 'advisory', n: 'it tells you — never auto-acts', adv: true },
-  { k: 'Bluetooth', v: 'advisory', n: 'disconnect / pairing patterns', adv: true },
-]
-const GAUGES = [
-  { k: 'CPU', Icon: FiCpu, v: 34 },
-  { k: 'RAM', Icon: FiActivity, v: 61 },
-  { k: 'DISK', Icon: FiHardDrive, v: 22 },
-  { k: 'GPU', Icon: FiZap, v: 48, adv: true },
-]
-const PROFILES = ['Gaming', 'Coding', 'Streaming', 'Browsing', 'Media', 'Comms', 'Idle']
-const DETECT = [
-  { Icon: FiEye, k: 'Observe', d: 'RAM trips the threshold at 91.1% (14.01 / 15.37 GB) while the active profile is browsing.', tag: 'ram_high' },
-  { Icon: FiCompass, k: 'Orient', d: 'Builds the context a model would see — the top memory consumers, led by firefox.exe (PID 7612).' },
-  { Icon: FiCpu, k: 'Decide', d: 'Checks semantic memory before paying for an LLM call. ChromaDB returns a past fix at 0.992 — reuse it, skip gpt-5-mini.', tag: 'memory hit' },
-]
-const SOLID = [
-  '150+ tests across the decision, safety and tooling layers',
-  'The kernel’s platform-independence enforced by an AST boundary test',
-  'A silently-bypassable gate, caught in review and closed',
-  'A headless bug that killed Firefox — now fail-closed by default',
-]
-const GROWING = [
-  'Single-machine, Windows-only for now',
-  'Widen the anomaly surface it can act on',
-  'Wire the personal assistant in as the kernel’s second consumer',
-  'Still early — but what it does, it does carefully',
-]
-
-/* ---- right-side readouts ---- */
-function IdentityReadout() {
-  const rows = [['status', 'live · logon-triggered'], ['loop', 'OODA · LangGraph'], ['threads', '5 + watchdog'], ['language', 'Python 3.11'], ['model', 'gpt-5-mini → gpt-5']]
-  return (
-    <div className="sig-card">
-      <div className="card-bar"><span>daemon</span><span className="live">◉ online</span></div>
-      <dl className="sig-kv">
-        {rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
-      </dl>
-    </div>
-  )
-}
-function VitalsReadout({ run }) {
-  return (
-    <div className="sig-card">
-      <div className="card-bar"><span>console</span><span className="muted">sample reading</span></div>
-      <div className="sig-gauges">
-        {GAUGES.map((g) => (
-          <div key={g.k} className={`gauge ${g.adv ? 'adv' : ''}`}>
-            <div className="g-top"><span className="g-k"><g.Icon /> {g.k}</span><span className="g-v"><CountUp value={g.v} suffix="%" run={run} /></span></div>
-            <div className="g-track"><div className="g-fill" style={{ width: run ? `${g.v}%` : '0%' }} /></div>
-          </div>
-        ))}
-      </div>
-      <div className="card-note">GPU &amp; thermal are watched but advisory — reported, never auto-acted on.</div>
-    </div>
-  )
-}
-function ProfilesReadout() {
-  return (
-    <div className="sig-card">
-      <div className="card-bar"><span>profile detector</span></div>
-      <div className="sig-chips">
-        {PROFILES.map((p, i) => <span key={p} className={`chip ${i === 1 ? 'on' : ''}`}>{p}</span>)}
-      </div>
-      <div className="sig-pipe">
-        <span className="k">foreground</span><b>Code.exe</b><span className="arr">→</span>
-        <span className="k">profile</span><b>Coding</b><span className="arr">→</span>
-        <span className="k">power</span><b>High performance</b>
-      </div>
-    </div>
-  )
-}
-/* Faithful vector rebuild of the OODA control-loop diagram (was a low-res PNG).
-   Inline SVG so it stays crisp at any size. */
-const CL_TOP = [
-  { t: 'Observer', s: 'psutil + WMI' },
-  { t: 'Observe', s: 'anomaly detect' },
-  { t: 'Orient', s: 'build context' },
-  { t: 'Decide', s: 'plan action' },
-  { t: 'HITL', s: 'approve / deny', hex: true },
-  { t: 'Act', s: 'execute' },
-  { t: 'Verify', s: '→ fix memory' },
-]
-const CL_KERNEL = [
-  { t: 'RiskLevel', s: ['severity model'] },
-  { t: 'ApprovalGate', s: ['fail-closed', 'human-in-the-loop'], hi: true },
-  { t: 'Command Sanitizer', s: ['allowlist + denylist'] },
-  { t: 'Audit log', s: ['every action (JSONL)'] },
-  { t: 'Cost ledger', s: ['daily USD cap'] },
-  { t: 'Fix memory', s: ['replay past fixes'] },
-]
-function ControlLoop() {
-  const NW = 150, NT = 112, NH = 62, CY = 143
-  const nx = (i) => 27 + i * 167.5
-  const kx = (i) => 40 + i * 189
-  return (
-    <figure className="sig-arch">
-      <div className="archsvg-scroll">
-      <svg className="archsvg" viewBox="0 0 1200 580" role="img"
-        aria-label="OS Agent OODA control loop: Observer, Observe, Orient, Decide, a human-in-the-loop approval gate, Act and Verify, looping and running on the agentkernel trust substrate — RiskLevel, ApprovalGate, Command Sanitizer, Audit log, Cost ledger and Fix memory.">
-        <defs>
-          <marker id="clah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" className="a-ah" /></marker>
-          <marker id="clahd" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" className="a-ahd" /></marker>
-        </defs>
-
-        <text x="24" y="22" className="a-title">OODA control loop</text>
-        <text x="24" y="40" className="a-sub">Observe → Orient → Decide → Act → Verify · a LangGraph state machine</text>
-
-        <path className="a-loop" markerEnd="url(#clahd)" d="M1107,108 C1107,76 500,66 269.5,90 L269.5,104" />
-        <text x="760" y="62" className="a-sub" textAnchor="middle">re-samples every 5–30s</text>
-
-        {CL_TOP.slice(0, -1).map((_, i) => (
-          <line key={`c${i}`} className="a-arrow" markerEnd="url(#clah)" x1={nx(i) + NW} y1={CY} x2={nx(i + 1) - 5} y2={CY} />
-        ))}
-
-        {CL_TOP.map((n, i) => {
-          const x = nx(i), cx = x + NW / 2
-          if (n.hex) {
-            const pts = `${x},${CY} ${x + 22},${NT} ${x + NW - 22},${NT} ${x + NW},${CY} ${x + NW - 22},${NT + NH} ${x + 22},${NT + NH}`
-            return (
-              <g key={i}>
-                <polygon className="a-hex" points={pts} />
-                <text x={cx} y={CY - 3} className="a-nt a-amber" textAnchor="middle">{n.t}</text>
-                <text x={cx} y={CY + 13} className="a-ns a-amber" textAnchor="middle">{n.s}</text>
-              </g>
-            )
-          }
-          return (
-            <g key={i}>
-              <rect className="a-node" x={x} y={NT} width={NW} height={NH} rx="7" />
-              <text x={cx} y={CY - 3} className="a-nt" textAnchor="middle">{n.t}</text>
-              <text x={cx} y={CY + 13} className="a-ns" textAnchor="middle">{n.s}</text>
-            </g>
-          )
-        })}
-
-        <line className="a-arrow" markerEnd="url(#clah)" x1={nx(3) + 75} y1={NT + NH} x2={nx(3) + 75} y2="232" />
-        <line className="a-arrow" markerEnd="url(#clah)" x1={nx(5) + 75} y1={NT + NH} x2={nx(5) + 75} y2="232" />
-
-        <rect className="a-node" x="360" y="235" width="362" height="80" rx="7" />
-        <text x="376" y="261" className="a-nt" textAnchor="start">Decision engine</text>
-        <text x="376" y="283" className="a-ns" textAnchor="start">4-layer: whitelist → blacklist → learned votes → AI</text>
-        <text x="376" y="300" className="a-ns" textAnchor="start">LLM triage gpt-5-mini → gpt-5 · ChromaDB memory reuse</text>
-
-        <rect className="a-node" x="760" y="235" width="422" height="80" rx="7" />
-        <text x="776" y="261" className="a-nt" textAnchor="start">AgentTools</text>
-        <text x="776" y="283" className="a-ns" textAnchor="start">kill · priority · restart · powercfg</text>
-        <text x="776" y="300" className="a-ns" textAnchor="start">sanitized run_command (allowlisted)</text>
-
-        <text x="600" y="344" className="a-mid" textAnchor="middle">OS-domain policy (risk map · allowlist) binds to the kernel below</text>
-
-        <rect className="a-kernel-box" x="20" y="362" width="1160" height="200" rx="10" />
-        <text x="42" y="391" className="a-kernel">agentkernel</text>
-        <text x="156" y="391" className="a-sub">reusable trust substrate — no src/ or platform imports (AST-enforced boundary)</text>
-
-        {CL_KERNEL.map((b, i) => {
-          const x = kx(i), cx = x + 87.5
-          return (
-            <g key={i}>
-              <rect className={b.hi ? 'a-kbox-hi' : 'a-kbox'} x={x} y="410" width="175" height="132" rx="7" />
-              <text x={cx} y={b.s.length > 1 ? 462 : 470} className={`a-kt${b.hi ? ' a-green' : ''}`} textAnchor="middle">{b.t}</text>
-              {b.s.map((line, j) => (
-                <text key={j} x={cx} y={(b.s.length > 1 ? 482 : 490) + j * 16} className="a-ks" textAnchor="middle">{line}</text>
-              ))}
-            </g>
-          )
-        })}
-      </svg>
-      </div>
-      <figcaption>built to be lifted into its own repo unchanged — JARVIS is lined up as its second consumer</figcaption>
-    </figure>
-  )
+/* Marginalia. Sits in the left margin on a wide page and folds into the text
+ * column on a narrow one — it is a note, not a sidebar, so it never scrolls
+ * independently and never carries content the body needs. */
+function Note({ children }) {
+  return <span className="note">{children}</span>
 }
 
-/* Faithful vector rebuild of the real `rich` terminal dashboard — crisp at any
-   size, real data from the running tool. (The screenshot it replaces was a
-   low-res raster.) */
-const TD_METRICS = [
-  { k: 'CPU', pct: 96, bar: 'red', pc: 'red' },
-  { k: 'RAM', pct: 82, bar: 'warn', pc: 'warn', sub: '13.1 / 16.0 GB' },
-  { gap: true },
-  { k: 'Disk', pct: 74, bar: 'warn', pc: 'warn' },
-  { k: 'GPU', pct: 45, bar: 'warn', pc: 'warn', sub: 'VRAM: 1536 MB' },
-]
-const TD_PROCS = [
-  ['chrome.exe', 7421, 38.4, 2860], ['Code.exe', 10233, 21.7, 1740],
-  ['python.exe', 15880, 12.1, 410], ['Discord.exe', 9044, 6.3, 690],
-  ['Spotify.exe', 8120, 3.9, 520], ['dwm.exe', 1356, 2.4, 240],
-  ['pythonw.exe', 15764, 1.8, 180], ['explorer.exe', 6012, 0.7, 330],
-]
-const TD_DIAG = [
-  ['14:32:07', 'High CPU on chrome.exe', 'Set process priority…', '0.92', 'low', 'green'],
-  ['14:21:50', 'RAM pressure at 86%', 'Trim working sets', '0.88', 'low', 'green'],
-  ['13:58:12', 'Frequent Bluetooth disco…', 'Disable BT power mgmt', '0.80', 'medium', 'warn'],
-  ['11:04:33', 'Unknown high-CPU process', 'Ask user (HITL gate)', '0.61', 'high', 'red'],
-]
-const cpuClass = (c) => (c >= 30 ? 'red' : c >= 15 ? 'warn' : 'green')
-function TermDash() {
+function Clause({ n, title, children }) {
+  const id = `s${n}`
   return (
-    <div className="sig-dashwrap">
-      <div className="td" role="img" aria-label="OS Agent live terminal dashboard showing system metrics, top processes, status, Bluetooth devices and the agent's diagnosis log">
-        <div className="td-head"><b>OS&nbsp;Agent</b> — Live Dashboard<span className="c-dim">   Press Ctrl+C to exit</span></div>
-        <div className="td-grid">
-          <section className="td-panel"><span className="p-title">System Metrics</span>
-            {TD_METRICS.map((m, i) => m.gap ? <div key={i} className="m-gap" /> : (
-              <div key={i}>
-                <div className="m-row">
-                  <span className="m-k">{m.k}</span>
-                  <span className="m-bar"><span className={`m-fill c-bg-${m.bar}`} style={{ width: `${m.pct}%` }} /></span>
-                  <span className={`m-pc c-${m.pc}`}>{m.pct}%</span>
-                </div>
-                {m.sub && <div className="m-sub">{m.sub}</div>}
-              </div>
-            ))}
-          </section>
-          <section className="td-panel"><span className="p-title">Status</span>
-            <div className="s-row"><span className="s-k">Profile:</span><span><span className="c-green">●</span> <span className="c-green">Coding</span></span></div>
-            <div className="s-sub">↳ Code.exe</div>
-            <div className="s-row"><span className="s-k">Power:</span><span><span className="c-amber">⚡</span> <span className="c-amber">Balanced</span></span></div>
-            <div className="s-spacer" />
-            <div className="s-row"><span className="s-k">Agent:</span><span><span className="c-green">●</span> <span className="c-green">Running</span></span></div>
-            <div className="s-row"><span className="s-k">Battery:</span><span className="c-dim">On AC</span></div>
-            <div className="s-row"><span className="s-k">Polling:</span><span><span className="c-blue">AC (normal)</span> — every 5s</span></div>
-            <div className="s-row"><span className="s-k">Cores:</span><span><span className="c-blue">16</span> logical</span></div>
-          </section>
-          <section className="td-panel"><span className="p-title">Top Processes</span>
-            <div className="t-row t-head"><span>Process</span><span>PID</span><span>CPU%</span><span>RAM MB</span></div>
-            {TD_PROCS.map((p) => (
-              <div key={p[0]} className="t-row">
-                <span>{p[0]}</span><span className="c-dim">{p[1]}</span>
-                <span className={`c-${cpuClass(p[2])}`}>{p[2].toFixed(1)}</span><span className="c-dim">{p[3]}</span>
-              </div>
-            ))}
-          </section>
-          <section className="td-panel"><span className="p-title">Bluetooth</span>
-            <div className="bt-row"><span className="c-green">●</span> Headphones</div>
-            <div className="bt-row"><span className="c-green">●</span> Wireless Mouse</div>
-            <div className="bt-row"><span className="c-green">●</span> Phone</div>
-          </section>
-        </div>
-        <section className="td-panel td-diag"><span className="p-title">Agent Diagnosis</span>
-          <div className="d-row d-head"><span>Time</span><span>Issue</span><span>Fix</span><span>Conf</span><span>Risk</span></div>
-          {TD_DIAG.map((d) => (
-            <div key={d[0]} className="d-row">
-              <span className="c-dim">{d[0]}</span><span>{d[1]}</span><span className="c-dim">{d[2]}</span>
-              <span>{d[3]}</span><span className={`c-${d[5]}`}>{d[4]}</span>
-            </div>
-          ))}
-        </section>
-        <div className="td-foot">next snapshot in 7m 3s │ high-risk = immediate</div>
-      </div>
-      <div className="sig-shotcap">the live dashboard · rich TUI</div>
-    </div>
-  )
-}
-function GateReadout() {
-  const [decided, setDecided] = useState(null)
-  return (
-    <div className="sig-card gate">
-      <div className="card-bar"><span>approval gate</span><span className="risk med">risk: medium</span></div>
-      <pre className="gate-json">{`restart_service("wuauserv")
-reason: wedged at 100% disk, 8 min
-profile: coding · interrupts a download`}</pre>
-      {!decided ? (
-        <div className="gate-actions">
-          <button className="g-btn ok" onClick={() => setDecided('approve')}><FiCheckCircle /> Approve</button>
-          <button className="g-btn no" onClick={() => setDecided('deny')}><FiXCircle /> Deny</button>
-        </div>
-      ) : (
-        <div className={`gate-out ${decided}`}>
-          {decided === 'approve'
-            ? <><FiCheckCircle /> Executed · logged to the audit trail · outcome stored to memory.</>
-            : <><FiXCircle /> Denied · logged. In headless mode this is automatic — the gate is fail-closed.</>}
-          <button className="relink" onClick={() => setDecided(null)}>reset</button>
-        </div>
-      )}
-      <div className="gate-ladder">
-        <span className="rl ok"><FiCheckCircle /> low · auto</span>
-        <span className="rl med"><FiAlertTriangle /> medium · asks you</span>
-        <span className="rl high"><FiLock /> high · denied</span>
-      </div>
-    </div>
-  )
-}
-
-/* ---- section wrapper ---- (active state is computed from scroll position in App) */
-function Section({ index, active, wide, contentClass = '', children }) {
-  return (
-    <section className={`sig-sec ${index === active ? 'on' : ''}`}>
-      <div className={`sig-content ${wide ? 'wide' : ''} ${contentClass}`}>{children}</div>
+    <section className="clause" id={id}>
+      <h2><span className="clause-n">§{n}</span><a href={`#${id}`}>{title}</a></h2>
+      {children}
     </section>
   )
 }
 
-export default function App() {
-  const reduce = useReducedMotion()
-  const [active, setActive] = useState(0)
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 920px)').matches,
+/* A line lifted from logs/agent.log, carrying the line number it came from so
+ * a reader can run `sed -n '<n>p' logs/agent.log` and get the same string. */
+function Quoted({ q, file = 'logs/agent.log' }) {
+  return (
+    <figure className="quote">
+      <pre>{q.text}</pre>
+      <figcaption>{file} : {int(q.line)}{q.redacted ? ' · one name withheld' : ''}</figcaption>
+    </figure>
   )
-  const scrollerRef = useRef(null)
-  const goToRef = useRef(null)
+}
 
-  // on mobile the page is a normal scrolling document; the snap scroller only
-  // drives wider viewports, so track the breakpoint and re-bind when it crosses
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 920px)')
-    const on = () => setIsMobile(mq.matches)
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [])
+/* ---- figure 1: the control loop ----------------------------------------- */
+const LOOP = ['Observe', 'Orient', 'Decide', 'Gate', 'Act', 'Verify']
+const KERNEL = [
+  ['RiskLevel', 'severity model'],
+  ['ApprovalGate', 'fail-closed'],
+  ['CommandSanitizer', 'allowlist'],
+  ['Audit log', 'JSONL, append-only'],
+  ['Cost ledger', 'daily USD cap'],
+  ['FixMemory', 'replays past fixes'],
+]
+function Figure1() {
+  /* Geometry derived from the viewBox, not chosen: the 6 loop nodes and the 6
+   * kernel boxes each have to span the same 904 units between the 8-unit
+   * margins, so the step is (904 - width) / 5. Picking round numbers instead
+   * is how the kernel row overflowed the viewBox the first time. */
+  const SPAN = 904, X0 = 8
+  const W = 128, H = 54
+  const x = (i) => X0 + i * ((SPAN - W) / 5)
+  const kw = 140, kx = (i) => X0 + i * ((SPAN - kw) / 5)
+  return (
+    <figure className="fig">
+      <svg viewBox="0 0 920 300" role="img"
+        aria-label="The OODA control loop — Observe, Orient, Decide, a fail-closed approval gate, Act, Verify — running on top of the agentkernel trust substrate: RiskLevel, ApprovalGate, CommandSanitizer, audit log, cost ledger and FixMemory.">
+        <defs>
+          <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L7,3 L0,6" className="f-ah" />
+          </marker>
+        </defs>
 
-  // active beat = the one whose midpoint is nearest the viewport center.
-  // Computed from scroll position (rAF-throttled) so it's exact for both the
-  // desktop snap scroller and mobile native scrolling, and robust for beats
-  // taller than the viewport.
-  useEffect(() => {
-    const el = scrollerRef.current
-    if (!el) return
-    let raf = 0
-    const compute = () => {
-      raf = 0
-      const secs = el.querySelectorAll('.sig-sec')
-      const center = el.scrollTop + el.clientHeight / 2
-      let best = 0, bestDist = Infinity
-      secs.forEach((s, i) => {
-        const dist = Math.abs(s.offsetTop + s.offsetHeight / 2 - center)
-        if (dist < bestDist) { bestDist = dist; best = i }
-      })
-      setActive((a) => (a === best ? a : best))
-    }
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(compute) }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    compute()
-    return () => { el.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf) }
-  }, [])
+        {LOOP.slice(0, -1).map((_, i) => (
+          <line key={i} className="f-arrow" markerEnd="url(#ah)" x1={x(i) + W} y1={57} x2={x(i + 1) - 3} y2={57} />
+        ))}
+        <path className="f-return" markerEnd="url(#ah)" d={`M${x(5) + W / 2},86 L${x(5) + W / 2},104 L${x(0) + W / 2},104 L${x(0) + W / 2},33`} />
+        <text x={x(2) + W / 2} y="119" className="f-cap" textAnchor="middle">
+          re-samples every {settings.poll_interval_seconds}s on AC, {settings.poll_interval_battery_seconds}s on battery
+        </text>
 
-  const beats = useMemo(() => ([
-    { label: 'ONLINE' }, { label: '01 · OBSERVE' }, { label: '02 · ADAPT' },
-    { label: '03 · DETECT' }, { label: '04 · ACT, SAFELY' }, { label: '05 · THE KERNEL' },
-    { label: 'STATE' }, { label: 'OPEN' },
-  ]), [])
-  const total = beats.length
+        {LOOP.map((n, i) => (
+          <g key={n}>
+            <rect className={n === 'Gate' ? 'f-node f-gate' : 'f-node'} x={x(i)} y="30" width={W} height={H} />
+            <text x={x(i) + W / 2} y="62" className="f-nt" textAnchor="middle">{n}</text>
+          </g>
+        ))}
+        <text x={x(3) + W / 2} y="22" className="f-cap" textAnchor="middle">fail-closed</text>
 
-  useEffect(() => {
-    const el = scrollerRef.current
-    if (!el) return
-    let idx = 0, acc = 0, last = 0, cooling = false, cd
-    const go = (next) => {
-      const clamped = Math.max(0, Math.min(total - 1, next))
-      acc = 0
-      if (clamped === idx) return
-      idx = clamped
-      const secs = el.querySelectorAll('.sig-sec')
-      const top = secs[idx] ? secs[idx].offsetTop : idx * window.innerHeight
-      el.scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' })
-      cooling = true; clearTimeout(cd); cd = setTimeout(() => { cooling = false }, COOLDOWN)
-    }
-    goToRef.current = go
-    const onKey = (e) => {
-      if (['ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); go(idx + 1) }
-      else if (['ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); go(idx - 1) }
-      else if (e.key === 'Home') { e.preventDefault(); go(0) }
-      else if (e.key === 'End') { e.preventDefault(); go(total - 1) }
-    }
-    window.addEventListener('keydown', onKey)
-    let onWheel, onTS, onTE, touchY = 0, touchBody = null
-    if (!reduce && !isMobile) {
-      onWheel = (e) => {
-        e.preventDefault()
-        if (cooling) return
-        const now = Date.now()
-        if (now - last > GESTURE_GAP) acc = 0
-        last = now
-        if ((acc > 0 && e.deltaY < 0) || (acc < 0 && e.deltaY > 0)) acc = 0
-        acc += e.deltaY
-        if (acc > WHEEL_THRESHOLD) go(idx + 1)
-        else if (acc < -WHEEL_THRESHOLD) go(idx - 1)
-      }
-      onTS = (e) => { touchY = e.touches[0].clientY; touchBody = e.target.closest ? e.target.closest('.sig-scrollable') : null }
-      onTE = (e) => {
-        if (cooling) return
-        const dy = touchY - e.changedTouches[0].clientY
-        if (Math.abs(dy) < TOUCH_THRESHOLD) return
-        const b = touchBody
-        if (b && b.scrollHeight > b.clientHeight + 2) {
-          const atTop = b.scrollTop <= 2
-          const atBottom = b.scrollTop + b.clientHeight >= b.scrollHeight - 2
-          if (dy > 0 && !atBottom) return
-          if (dy < 0 && !atTop) return
-        }
-        go(idx + (dy > 0 ? 1 : -1))
-      }
-      el.addEventListener('wheel', onWheel, { passive: false })
-      el.addEventListener('touchstart', onTS, { passive: true })
-      el.addEventListener('touchend', onTE, { passive: true })
-    }
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      if (onWheel) { el.removeEventListener('wheel', onWheel); el.removeEventListener('touchstart', onTS); el.removeEventListener('touchend', onTE) }
-      clearTimeout(cd); goToRef.current = null
-    }
-  }, [reduce, total, isMobile])
+        <rect className="f-kbox" x="8" y="148" width="904" height="140" />
+        <text x="22" y="172" className="f-kt">agentkernel</text>
+        <text x="118" y="172" className="f-cap">platform-agnostic · forbidden from importing the Windows code, by a test</text>
+        {KERNEL.map(([t, s], i) => (
+          <g key={t}>
+            <rect className="f-knode" x={kx(i)} y="192" width={kw} height={76} />
+            <text x={kx(i) + kw / 2} y="226" className="f-knt" textAnchor="middle">{t}</text>
+            <text x={kx(i) + kw / 2} y="245" className="f-cap" textAnchor="middle">{s}</text>
+          </g>
+        ))}
+      </svg>
+      <figcaption>
+        <b>Figure 1.</b> The loop, and the substrate it stands on. The gate sits between
+        deciding and acting; nothing reaches <i>Act</i> around it.
+      </figcaption>
+    </figure>
+  )
+}
+
+/* ---- appendix A: the ledger --------------------------------------------- */
+const verdictOf = (r) =>
+  r.ok ? 'applied' : /^Refused/.test(r.message) ? 'refused' : 'denied'
+
+/* The three verdicts, in the order they appear in the ledger's own vocabulary.
+ * "applied" has no hue: it is the unmarked case. */
+const VERDICTS = [
+  ['applied', 'applied'],
+  ['refused', 'refused by the agent'],
+  ['denied', 'refused by Windows'],
+]
+
+/* The legend doubles as the filter. The swatch is already a printed tickbox —
+ * a square rule you fill in — so making it a real control adds a behaviour the
+ * form already implied rather than a widget the manual has no place for.
+ *
+ * Every row is in the DOM at all times; filtering sets a class. A reader who
+ * never touches it, or whose JavaScript never runs, sees the complete table,
+ * and ctrl-F still finds every line. */
+function Ledger() {
+  const [on, setOn] = useState(() => new Set(VERDICTS.map(([k]) => k)))
+  const toggle = (k) => setOn((prev) => {
+    const next = new Set(prev)
+    // never let the reader filter the table down to nothing: turning the last
+    // one off turns the other two back on, which is what they meant
+    if (next.has(k)) next.delete(k); else next.add(k)
+    return next.size ? next : new Set(VERDICTS.map(([v]) => v).filter((v) => v !== k))
+  })
+
+  const shown = ledgerRows.filter((o) => on.has(verdictOf(o.sample)))
 
   return (
-    <div className="sig" ref={scrollerRef}>
-      <div className="sig-field" aria-hidden="true" />
-      <SignalLine active={active} total={total} />
+    <>
+      <div className="legend" role="group" aria-label="Filter the ledger by outcome">
+        {VERDICTS.map(([k, label]) => {
+          const n = ledgerRows.filter((o) => verdictOf(o.sample) === k).length
+          return (
+            <button
+              key={k}
+              type="button"
+              className={`sw v-${k}${on.has(k) ? ' on' : ''}`}
+              aria-pressed={on.has(k)}
+              onClick={() => toggle(k)}
+            >
+              {label} <span className="sw-n">{n}</span>
+            </button>
+          )
+        })}
+        <span className="legend-count" aria-live="polite">
+          showing {shown.length} of {ledgerRows.length}
+        </span>
+      </div>
 
-      <header className="sig-top">
-        <span className="brand">OS&nbsp;AGENT</span>
-        <span className="sub">self-optimizing daemon</span>
-        <a className="top-link" href={LINKS.github} target="_blank" rel="noreferrer"><FiGithub /> source</a>
+      <div className="ledger-wrap">
+        <table className="ledger">
+          <caption className="vh">
+            Every distinct outcome in the ledger: the date it first happened, the action,
+            its risk level, the line the agent wrote, and how many times it has recurred.
+          </caption>
+          <thead>
+            <tr>
+              <th>First seen</th><th>Action</th><th>Risk</th><th>Outcome</th>
+              <th className="l-n-h">Times</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((o) => (
+              <tr key={o.text} className={`v-${verdictOf(o.sample)}`}>
+                <td className="l-ts">{o.sample.ts.slice(0, 10)}</td>
+                <td className="l-act">{o.sample.action}</td>
+                <td className="l-risk">{o.sample.risk}</td>
+                <td className="l-msg">{o.text}</td>
+                <td className="l-n">{int(o.n)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
+
+/* ========================================================================== */
+export default function App() {
+  const oneKill = killLedger.theOneThatWentThrough
+
+  return (
+    <>
+      {/* the sheet itself: tooth, margin rule, trim marks. See styles.css. */}
+      <div className="sheet-tooth" aria-hidden="true" />
+      <div className="sheet-trim" aria-hidden="true" />
+
+      <header className="masthead">
+        <p className="mh-l">OS Agent</p>
+        <p className="mh-r">Field guide · issue {generated}</p>
       </header>
 
-      {/* 00 — intro */}
-      <Section index={0} active={active} setActive={setActive}>
-        <div className="sig-main">
-          <div className="sig-eyebrow">a Windows system agent</div>
-          <h1 className="sig-h1">Your machine, watched by<br />something that <span className="g">asks first.</span></h1>
-          <p>It started with Valorant stuttering while a friend's PC ran the same game, Spotify and a dozen tabs without blinking. Hardware aside, the real friction was <em>me</em> — hand-picking power presets and re-tuning them every time my usage shifted.</p>
-          <p>OS Agent watches how I actually use the machine and adapts on its own. It can kill processes, restart services and touch the registry — so the harder half of the project is making sure it <span className="g">never acts without earning the right to.</span></p>
-          <div className="sig-cta">
-            <button className="sig-btn" onClick={() => goToRef.current?.(1)}>Follow the signal <FiArrowRight /></button>
-            <a className="sig-btn ghost" href={LINKS.github} target="_blank" rel="noreferrer"><FiGithub /> View source</a>
-          </div>
-        </div>
-        <div className="sig-aside"><IdentityReadout /></div>
-      </Section>
+      <main>
+        {/* ---- title page ------------------------------------------------ */}
+        <section className="title">
+          <h1>OS&nbsp;Agent</h1>
+          <Note>
+            Field guide<br />Issue {generated}<br />
+            Appendix&nbsp;A current to {span.to}<br />
+            Source: MIT
+          </Note>
+          <p className="standfirst">
+            A background daemon that watches a Windows machine and is permitted to change
+            it — set a process priority, kill a process, switch the power plan, restart a
+            service, edit the registry. This is the manual: what it does, what stops it,
+            and what it has actually done.
+          </p>
 
-      {/* 01 — watch */}
-      <Section index={1} active={active} setActive={setActive}>
-        <div className="sig-main">
-          <div className="sig-eyebrow">01 · observe</div>
-          <h2 className="sig-h2">It watches everything, all the time.</h2>
-          <p>Five daemon threads sample the machine every 5s on AC, 30s on battery. Each signal has a trip threshold and a cooldown, so it reacts to real trouble — not noise.</p>
-          <ul className="sig-senses">
-            {SENSES.map((s) => (
-              <li key={s.k} className={s.adv ? 'adv' : ''}>
-                <span className="k">{s.k}</span><span className="v">{s.v}</span><span className="n">{s.n}</span>
-              </li>
-            ))}
+          <div className="may">
+            <div>
+              <h3>What it may do</h3>
+              <ul>
+                <li>Lower a process&rsquo;s priority</li>
+                <li>Switch the Windows power plan to match what you&rsquo;re doing</li>
+                <li>Trim idle working sets</li>
+                <li>Kill a process that is on the profile&rsquo;s kill-candidate list</li>
+                <li>Run a command from a narrow allowlist of executables</li>
+                <li>Append to its own audit log — always, including dry runs</li>
+              </ul>
+            </div>
+            <div>
+              <h3>What it may not</h3>
+              <ul>
+                <li>Kill anything on the global whitelist — <code>explorer</code>, <code>csrss</code>,
+                  <code>winlogon</code>, <code>services</code>, <code>svchost</code>, <code>lsass</code>,
+                  <code>dwm</code>, <code>System</code>, <code>smss</code></li>
+                <li>Kill a user application that has unsaved state</li>
+                <li>Run a shell interpreter — <code>powershell</code> and <code>cmd</code> were
+                  removed from the allowlist, not blocklisted</li>
+                <li>Approve its own gated actions when running headless</li>
+                <li>Acquire privileges it wasn&rsquo;t started with; without admin it fails and says so</li>
+                <li>Spend past the daily cost cap</li>
+              </ul>
+            </div>
+          </div>
+
+          <p className="attached">
+            It has recorded {int(totals.records)} actions across {span.activeDays} days
+            between {longDate(span.from)} and {longDate(span.to)}. They come down to{' '}
+            {ledgerRows.length} distinct outcomes, bound in as{' '}
+            <a href="#appendix">Appendix&nbsp;A</a> — each one a real dated record, none
+            of them paraphrased.
+          </p>
+
+          <p className="links">
+            <a href={LINKS.github}>Source (MIT)</a>
+            <a href={LINKS.ledger}>The ledger itself</a>
+            <a href={LINKS.guide}>The manual this page is set from</a>
+          </p>
+        </section>
+
+        {/* ---- §1 --------------------------------------------------------- */}
+        <Clause n="1" title="What it watches">
+          <p>
+            An observer loop samples the machine on a fixed cadence, with background
+            threads beside it for profile detection, Bluetooth, audio suggestions and a
+            watchdog — the last two only start if those features are switched on. Each
+            signal has a trip threshold and a shared cooldown, so a machine that is
+            briefly busy is not a machine in trouble. Every threshold below is read at
+            build time from the agent&rsquo;s own <code>config/settings.yaml</code>.
+          </p>
+          <Note>
+            The cooldown is why the ledger has long quiet stretches: a second{' '}
+            <code>ram_high</code> inside {settings.cooldown_minutes} minutes is suppressed,
+            not acted on twice.
+          </Note>
+
+          <table className="spec">
+            <caption className="vh">Trip thresholds, read from config/settings.yaml</caption>
+            <tbody>
+              <tr><th>CPU</th><td>&gt; {settings.cpu_threshold_percent}%</td><td>sustained {settings.cpu_sustained_seconds}s</td></tr>
+              <tr><th>RAM</th><td>&gt; {settings.ram_threshold_percent}%</td><td>of total</td></tr>
+              <tr><th>Disk</th><td>&gt; {settings.disk_threshold_percent}%</td><td>usage</td></tr>
+              <tr><th>GPU</th><td>&gt; {settings.gpu_threshold_percent}%</td><td>utilisation</td></tr>
+              <tr><th>Memory leak</th><td>&gt; {settings.memory_leak_growth_mb} MB</td><td>growth in {settings.memory_leak_window_minutes} min</td></tr>
+              <tr><th>Cooldown</th><td>{settings.cooldown_minutes} min</td><td>suppresses a repeat of the same anomaly</td></tr>
+            </tbody>
+          </table>
+
+          <p>It says so itself on the way up:</p>
+          <Quoted q={quotes.observer} />
+        </Clause>
+
+        {/* ---- §2 --------------------------------------------------------- */}
+        <Clause n="2" title="How it decides">
+          <p>
+            A decision climbs a ladder, cheapest rung first, and most decisions never
+            reach the top of it. Config whitelist or blacklist — instant and certain.
+            Then the profile&rsquo;s own rules. Then what the machine has learned from
+            past fixes. Only a genuinely unknown case reaches a model.
+          </p>
+          <p>
+            When it does, the cheap model goes first. A triage answer below{' '}
+            {settings.confidence_threshold} confidence escalates; a stored fix within{' '}
+            {settings.similarity_threshold} cosine similarity is replayed instead of
+            asking at all.
+          </p>
+          <Quoted q={quotes.triage} />
+
+          <Box kind="model" title="Spend the cheap oracle first">
+            <p>
+              Triage with the small model, escalate on low confidence. The ledger says
+              this is not theoretical: across {cost.days} days of recorded spend the total
+              is {usd(cost.total)}, and the most expensive single day was{' '}
+              {usd(cost.max[1])} on {longDate(cost.max[0])}.
+            </p>
+          </Box>
+
+          <Box kind="war" title="897 wasted calls to diagnose a flaky Bluetooth mouse">
+            <p>
+              An earlier build escalated every Bluetooth event to the model. One twitchy
+              device produced a flood — nearly 900 paid calls to be told, repeatedly, that
+              a mouse had disconnected. The fix was not a better prompt. It was not calling
+              the model: stricter event classification, and a cooldown.
+            </p>
+          </Box>
+
+          <p>
+            It is also allowed to conclude that there is nothing it can safely do, and
+            say so rather than act:
+          </p>
+          <Quoted q={quotes.advisory} />
+        </Clause>
+
+        {/* ---- §3 --------------------------------------------------------- */}
+        <Clause n="3" title="What stops it">
+          <p>
+            Every action carries a risk level, and the gate between deciding and acting
+            is <b>fail-closed</b>: with no approval callback and no answer, nothing
+            happens. Low risk acts on its own. Medium waits for a person. High is
+            refused outright.
+          </p>
+          <Note>
+            &ldquo;Fail-closed&rdquo; is only a claim until you can see it fail. The line
+            below is the gate refusing a kill because nobody was at the console.
+          </Note>
+          <Quoted q={quotes.headless} />
+          <p>
+            That is the daemon&rsquo;s normal condition — it runs from a logon-triggered
+            scheduled task, with no console. Headless, it denies every gated action.
+            The cost of that choice is real and is stated in <a href="#s7">§7</a>.
+          </p>
+
+          <Box kind="war" title="The gate that was a decoration">
+            <p>
+              The gate had an ordering bug: it asked &ldquo;is this risk level
+              auto-approvable?&rdquo; <i>before</i> it asked &ldquo;is this action
+              inherently dangerous?&rdquo; Anything labelled low sailed through — and two
+              other bugs forced risky actions to be labelled low. The three most dangerous
+              actions never triggered the human prompt, while the documentation claimed
+              they always required approval. Two independent controls failing in the same
+              direction is not a typo; it is a design that fails open.
+            </p>
+          </Box>
+
+          <Box kind="war" title="The allowlist with a loaded gun on it">
+            <p>
+              The command filter allowlisted executables — correct — but{' '}
+              <code>powershell.exe</code> and <code>cmd.exe</code> were on the list, with a
+              blocklist of frightening substrings behind them. PowerShell is a programming
+              language; <code>Remove-Item -Recurse -Force</code> was never on the
+              blocklist and never could be, because you cannot enumerate infinity. The fix
+              was to take the interpreters off the allowlist.
+            </p>
+          </Box>
+
+          <Box kind="gotcha" title="Allowlisting a shell is allowlisting everything">
+            <p>
+              Any general-purpose interpreter — <code>powershell</code>, <code>cmd</code>,{' '}
+              <code>python</code>, <code>bash</code>, <code>wmic</code> — can express
+              arbitrary behaviour. The only safe primitives are narrow and structured:
+              &ldquo;kill this PID&rdquo;, not &ldquo;run this string&rdquo;.
+            </p>
+          </Box>
+
+          <Box kind="war" title="Auto-disabling the antivirus to boost a framerate">
+            <p>
+              One profile action fired automatically on game launch and ran{' '}
+              <code>Set-MpPreference -DisableRealtimeMonitoring $true</code> — silently
+              turning off Defender&rsquo;s real-time protection. No prompt, no undo, no
+              audit entry. It was deleted rather than gated. Some capabilities should not
+              exist.
+            </p>
+          </Box>
+        </Clause>
+
+        {/* ---- §4 --------------------------------------------------------- */}
+        <Clause n="4" title="What it has actually done">
+          <p>
+            Everything below is counted from the agent&rsquo;s own{' '}
+            <code>data/actions.jsonl</code> — all {int(totals.records)} records of it.
+          </p>
+
+          <div className="figures">
+            <div><b>{int(totals.records)}</b><span>actions recorded</span></div>
+            <div><b>{span.activeDays}</b><span>days it did something</span></div>
+            <div><b>{int(killLedger.attempted)}</b><span>attempts to kill a process</span></div>
+            <div className="fig-hero"><b>{killLedger.allowed}</b><span>of them allowed through</span></div>
+          </div>
+
+          <p>
+            That last pair is the whole project in two numbers. Of{' '}
+            {killLedger.attempted} attempts to kill something,{' '}
+            {killLedger.refusedByPolicy} were refused by the agent&rsquo;s own rules and{' '}
+            {killLedger.refusedByWindows} were refused by Windows for want of
+            administrator rights. These are counted apart on purpose: only the first kind
+            is restraint. The second is an access check, and taking credit for it would be
+            a lie about which mechanism held.
+          </p>
+
+          {oneKill && (
+            <>
+              <p>One got through, on {longDate(oneKill.ts.slice(0, 10))}:</p>
+              <figure className="quote">
+                <pre>{`${oneKill.ts.slice(0, 19).replace('T', ' ')}  ${oneKill.action}  risk=${oneKill.risk}
+${oneKill.message}
+trigger: ${oneKill.summary}   profile: ${oneKill.profile}   took: ${oneKill.ms} ms`}</pre>
+                <figcaption>data/actions.jsonl · composed from one record&rsquo;s fields</figcaption>
+              </figure>
+            </>
+          )}
+
+          <p>
+            The rest of the time it does the quiet thing instead:{' '}
+            {int(priorityLedger.attempted)} priority changes, of which{' '}
+            {int(priorityLedger.applied)} applied and {priorityLedger.deniedByWindows}{' '}
+            were denied by the OS. Lowering a priority is reversible and kills nothing,
+            which is why it is the action it reaches for.
+          </p>
+
+          <p>
+            Everything it has ever said comes down to {ledgerRows.length} distinct
+            outcomes. <a href="#appendix">Appendix&nbsp;A</a> prints all of them, each
+            with the date it first happened.
+          </p>
+
+          <h3 className="sub">What it spends its time on</h3>
+          <p>
+            The project started with a game stuttering while a friend&rsquo;s machine ran
+            the same game and a dozen tabs without blinking. That is still, by a wide
+            margin, what the ledger is mostly about.
+          </p>
+          <table className="spec procs">
+            <caption className="vh">Processes by how many ledger records name them</caption>
+            <tbody>
+              {processes.slice(0, 8).map((p) => (
+                <tr key={p.name}>
+                  <th>{p.name}</th>
+                  <td className="p-bar"><span style={{ width: `${(p.n / processes[0].n) * 100}%` }} /></td>
+                  <td className="p-n">{int(p.n)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Clause>
+
+        {/* ---- §5 --------------------------------------------------------- */}
+        <Clause n="5" title="How it learns, and how that went wrong">
+          <p>
+            Past fixes are stored as vectors so a recurring problem can be recognised
+            when the wording differs, and handled without paying for a model. The saving
+            is real. The first implementation of it was also the most dangerous code in
+            the project.
+          </p>
+
+          <Box kind="war" title="The memory that replayed a rubber stamp">
+            <p>
+              Reuse looked clever and hid three sins: it <i>forced</i> the risk level to
+              low, so the gate waved it through; it re-derived the action by keyword-matching
+              stored prose; and it treated a {settings.similarity_threshold} text match as
+              proof that two situations were identical. The most frequent path — the cache
+              hit — was the least scrutinised one, which is exactly backwards.
+            </p>
+          </Box>
+
+          <Box kind="war" title="The keyword-matcher that played charades with a shell">
+            <p>
+              The code took the model&rsquo;s prose and guessed the action by scanning for
+              verbs. If the sentence contained none of &ldquo;kill&rdquo;,
+              &ldquo;restart&rdquo; or &ldquo;priority&rdquo;, it put{' '}
+              <i>the entire English sentence</i> into <code>run_command</code> as though it
+              were a shell instruction. Structured output makes that unrepresentable: the
+              model picks from a list and supplies a validated integer PID. There is no
+              free-text channel left to abuse.
+            </p>
+          </Box>
+
+          <Box kind="model" title="Give the model a form, not a microphone">
+            <p>
+              A microphone lets it say anything and leaves you to interpret. A form lets
+              it tick boxes you pre-approved and fill fields you type-check.
+            </p>
+          </Box>
+
+          <Box kind="gotcha" title="Learning bakes in whatever you did, including the mistakes">
+            <p>
+              A memory of past fixes is a memory of past judgement. If a bad fix is stored
+              once, it is replayed every time the problem looks similar enough — and the
+              replay path is the one least likely to be watched.
+            </p>
+          </Box>
+        </Clause>
+
+        {/* ---- §6 --------------------------------------------------------- */}
+        <Clause n="6" title="The part that is meant to outlive the project">
+          <p>
+            The safety machinery lives in <code>agentkernel/</code> — risk scoring, the
+            approval gate, the command sanitizer, the audit log, the cost ledger, the fix
+            memory — as a package that knows nothing about Windows or about this
+            application. That is not a convention politely observed. A test walks the
+            kernel&rsquo;s imports and fails the build if any of them reach back into the
+            app, which is the only version of that promise worth making.
+          </p>
+          <Note>
+            {int(tests)} tests, counted by asking <code>pytest --collect-only</code>, not
+            by grepping for <code>def&nbsp;test_</code>.
+          </Note>
+          <Figure1 />
+          <p>
+            It was extracted so a second consumer could use it unchanged. That second
+            consumer exists and is not wired in yet; see <a href="#s7">§7</a>.
+          </p>
+        </Clause>
+
+        {/* ---- §7 --------------------------------------------------------- */}
+        <Clause n="7" title="What it cannot do">
+          <p>
+            This section is the point of the document. A manual that only lists
+            capabilities is a brochure.
+          </p>
+          <ul className="limits">
+            <li>
+              <b>It is one machine, and that machine runs Windows.</b> There is no fleet,
+              no server, no second install. The kernel is platform-agnostic; nothing
+              above it is.
+            </li>
+            <li>
+              <b>Headless, it approves nothing.</b> Fail-closed is the correct default and
+              it is also a real limitation: in its normal running condition every medium-
+              and high-risk action is refused, so the gated capabilities are effectively
+              unavailable unless you are sitting at a console.
+            </li>
+            <li>
+              <b>It watches the GPU but has never acted on it.</b> The threshold is live —
+              <code> gpu_high</code> anomalies are raised and reach the loop — but no GPU
+              action appears anywhere in {int(totals.records)} ledger records, and the
+              ledger is the only evidence that counts.
+            </li>
+            <li>
+              <b>Every recorded action came from one trigger.</b> All {int(totals.records)}{' '}
+              entries are <code>ram_high</code>. The CPU, disk and memory-leak thresholds
+              in <a href="#s1">§1</a> are configured and tested; they have not yet fired
+              in anger on this machine.
+            </li>
+            <li>
+              <b>Its vocabulary is small.</b> {Object.keys(totals.byAction).length} action
+              types appear in the ledger: {Object.keys(totals.byAction).join(' and ')}.
+              Restarting a service and editing the registry are implemented and gated, and
+              have never run outside tests.
+            </li>
+            <li>
+              <b>The second kernel consumer is not wired in.</b> The boundary was built so
+              a separate assistant project could sit on the same substrate. It does not
+              yet.
+            </li>
+            <li>
+              <b>Known rough edges, unfixed:</b> a non-recursive glob in the boundary
+              check, a non-POSIX <code>basename</code>, a shallow copy of history.
+            </li>
           </ul>
-        </div>
-        <div className="sig-aside"><VitalsReadout run={active === 1} /></div>
-      </Section>
+        </Clause>
 
-      {/* 02 — adapts */}
-      <Section index={2} active={active} setActive={setActive}>
-        <div className="sig-main">
-          <div className="sig-eyebrow">02 · adapt</div>
-          <h2 className="sig-h2">It adapts to how you're using it.</h2>
-          <p>It reads the foreground app and picks a profile, then switches the Windows power plan to match — debounced so an alt-tab doesn't thrash it. <span className="g">No more hand-picking presets, no more stale ones.</span></p>
-          <p>Gaming leans into performance; idle and battery wind things down. The profile it's in also shapes which processes it's even willing to touch.</p>
-        </div>
-        <div className="sig-aside"><ProfilesReadout /></div>
-      </Section>
+        {/* ---- appendix --------------------------------------------------- */}
+        <section className="clause" id="appendix">
+          <h2><span className="clause-n">App.&nbsp;A</span><a href="#appendix">The ledger</a></h2>
+          <p>
+            The {int(totals.records)} records in <code>data/actions.jsonl</code> collapse
+            to {ledgerRows.length} distinct outcomes. This is all {ledgerRows.length} of
+            them, oldest first, each one the real record of the first time it happened
+            and how often it has recurred since. Nothing the agent has ever done is
+            missing from this table — only the repetitions are, and those are counted in
+            the last column. The whole file is <a href={LINKS.ledger}>one click away</a>.
+          </p>
+          <p>
+            No line is paraphrased. {redactionsShown === 1 ? 'One row reads' : `${redactionsShown} rows read`}{' '}
+            <code>[a private app]</code> where a process name is withheld —{' '}
+            {redactions} of the {int(totals.records)} records across the whole file. The
+            cut is marked so you can see exactly what was taken out, and that nothing
+            else was.
+          </p>
+          <Note>
+            Tick a box to filter. The {ledgerRows.length} rows are the complete set of
+            outcomes, not a selection I made: group the file by message with the PID
+            masked and you get exactly these.
+          </Note>
+          <Ledger />
+        </section>
 
-      {/* 03 — detect (the spike) */}
-      <Section index={3} active={active} setActive={setActive}>
-        <div className="sig-main">
-          <div className="sig-eyebrow">03 · detect</div>
-          <h2 className="sig-h2">Then RAM hits <span className="g"><CountUp value={91} suffix="%" run={active === 3} /></span>.</h2>
-          <p>Pulled from the agent's own logs. It sees the spike, works out the cause, and checks what it already knows — before spending a cent on a model:</p>
-          <ol className="sig-run">
-            {DETECT.map((r) => (
-              <li key={r.k}>
-                <span className="st-ico"><r.Icon /></span>
-                <div><div className="st-k">{r.k}{r.tag && <span className="st-tag">{r.tag}</span>}</div><p>{r.d}</p></div>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="sig-aside"><TermDash /></div>
-      </Section>
-
-      {/* 04 — act, safely (the solution begins) */}
-      <Section index={4} active={active} setActive={setActive}>
-        <div className="sig-main">
-          <div className="sig-eyebrow">04 · act, safely</div>
-          <h2 className="sig-h2">Nothing risky happens without a <span className="g">yes</span>.</h2>
-          <p>A daemon that can kill processes, restart services and touch the registry has to be trustworthy first. Every action carries a risk level and the gate is <b>fail-closed</b> — no callback, no approval, no action.</p>
-          <p>This fix is low-risk, so it acts on its own: sets firefox.exe to low priority in 0 ms, never killing it (browsers are on a never-kill list). Then it writes the outcome to an append-only audit log and back to memory — so the next identical spike is handled instantly. Anything riskier waits for you.</p>
-        </div>
-        <div className="sig-aside"><GateReadout /></div>
-      </Section>
-
-      {/* 05 — the kernel */}
-      <Section index={5} active={active} setActive={setActive} wide contentClass="sig-arch-sec">
-        <div className="sig-arch-head">
-          <div className="sig-eyebrow">05 · the kernel</div>
-          <h2 className="sig-h2">The part I'm proudest of: a <span className="g">trust vault</span>.</h2>
-          <p>The safety machinery lives in <code>agentkernel/</code> — a platform-agnostic trust substrate with zero dependency on the Windows code, enforced by an AST boundary test. The whole loop runs on top of it.</p>
-        </div>
-        <ControlLoop />
-      </Section>
-
-      {/* 06 — honest state */}
-      <Section index={6} active={active} setActive={setActive} wide>
-        <div className="sig-state-head">
-          <div className="sig-eyebrow">the honest part</div>
-          <h2 className="sig-h2">What's solid, and what's still growing.</h2>
-        </div>
-        <div className="sig-state">
-          <div className="st-col solid">
-            <div className="col-h"><FiCheckCircle /> solid</div>
-            <ul>{SOLID.map((s) => <li key={s}>{s}</li>)}</ul>
-          </div>
-          <div className="st-col growing">
-            <div className="col-h"><FiArrowRight /> growing</div>
-            <ul>{GROWING.map((s) => <li key={s}>{s}</li>)}</ul>
-          </div>
-        </div>
-      </Section>
-
-      {/* 07 — open */}
-      <Section index={7} active={active} setActive={setActive}>
-        <div className="sig-main">
-          <div className="sig-eyebrow">open the daemon</div>
-          <h2 className="sig-h2">It runs on my machine right now.<br />The code's all <span className="g">here.</span></h2>
-          <p>Public and MIT-licensed. Some actions need admin and fail gracefully without it — the agent never escalates on its own. Clone it and read every decision it's allowed to make.</p>
-          <div className="sig-cta">
-            <a className="sig-btn" href={LINKS.github} target="_blank" rel="noreferrer"><FiGithub /> View on GitHub</a>
-            <a className="sig-btn ghost" href={LINKS.docs} target="_blank" rel="noreferrer"><FiBookOpen /> Architecture docs</a>
-          </div>
-          <div className="sig-sign">Akshit Kartik · {new Date().getFullYear()}</div>
-        </div>
-        <div className="sig-aside"><IdentityReadout /></div>
-      </Section>
-
-      <footer className="sig-bottom">
-        <span className="live"><FiShield /> asks before acting</span>
-        <span className="lbl">{beats[active].label}</span>
-        <span className="r">{String(active + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}</span>
-      </footer>
-      <div className="sig-hint">scroll · ↑ ↓</div>
-    </div>
+        {/* ---- colophon --------------------------------------------------- */}
+        <section className="colophon" id="colophon">
+          <h2>Colophon</h2>
+          <p>
+            Every line in Appendix A is real and was written by the agent. The
+            arrangement is mine: nothing on the owner&rsquo;s own machine prints this
+            ledger as a table, or next to the manual — that is this page&rsquo;s doing.
+          </p>
+          <p>
+            Every figure here is computed from that data at build time by{' '}
+            <code>src/data/derive.js</code>, so adding a record moves the numbers without
+            anyone editing a sentence. The test count comes from{' '}
+            <code>pytest --collect-only</code>. The thresholds in §1 are read from{' '}
+            <code>config/settings.yaml</code>. Quoted log lines carry the line number they
+            came from, and the build fails if a quoted line stops matching the file.
+          </p>
+          <p>
+            Set in Source Serif 4 and IBM Plex Mono. Anything in mono was said by the
+            machine; anything in serif was written by a person. Figures last derived{' '}
+            {longDate(generated)}.
+          </p>
+          <p className="links">
+            <a href={LINKS.github}>Source (MIT)</a>
+            <a href={LINKS.ledger}>data/actions.jsonl</a>
+            <a href={LINKS.guide}>docs/OS_Agent_Field_Guide.tex</a>
+          </p>
+          <p className="sign">Akshit Kartik</p>
+        </section>
+      </main>
+    </>
   )
 }
